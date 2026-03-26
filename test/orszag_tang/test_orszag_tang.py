@@ -48,7 +48,6 @@ def test_orszag_tang(num_mpi_ranks):
     M = Meshoid(coords, boxsize=1.0)
     rho_slice = M.Slice(np.log10(rho), res=2048, plane="z", center=np.array([0.5, 0.5, 0.5]), size=1.0)
 
-<<<<<<< HEAD
     plt.figure(figsize=(6, 6))
     plt.imshow(
         rho_slice.T,
@@ -61,15 +60,6 @@ def test_orszag_tang(num_mpi_ranks):
     plt.ylabel("y")
     plt.savefig(f"test/{test_name}/Density_2D.png", dpi=150)
     plt.close()
-=======
-    fig, ax = plt.subplots(figsize=(6, 6))
-    im = ax.imshow(rho_slice.T, origin="lower", cmap="viridis", extent=[coords[:,0].min(), coords[:,0].max(), coords[:,1].min(), coords[:,1].max()])
-    flush_colorbar(im, ax=ax, label="log10(Density)")
-    ax.set_xlabel("x")
-    ax.set_ylabel("y")
-    fig.savefig(f"test/{test_name}/Density_2D.png", dpi=150, bbox_inches="tight")
-    plt.close(fig)
->>>>>>> a91bdfb02a5a120dbff87833eed31a92b114a7da
 
     # Energy should be conserved to within ~10% (shock dissipation is expected)
     dE = abs(E_final - E_init) / abs(E_init)

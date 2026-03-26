@@ -16,8 +16,8 @@ from gizmo.test import build_and_run_test, default_mpi_ranks, clean_test_outputs
 
 def plot_mhd_blast_density_slice(coords, rho, output_dir="."):
     """Plot a density slice of the MHD blast wave."""
-    M = Meshoid(coords, boxsize=1.)
-    rho_slice = M.Slice(np.log10(rho), res=1024, plane="z", center=np.array([0.5, 0.5, 0.5]), size=1., order=1)
+    M = Meshoid(coords, boxsize=1.0)
+    rho_slice = M.Slice(np.log10(rho), res=1024, plane="z", center=np.array([0.5, 0.5, 0.5]), size=1.0, order=1)
     fig, ax = plt.subplots(figsize=(6, 6))
     im = ax.imshow(rho_slice.T, origin="lower", cmap="inferno", extent=[0, 1, 0, 1])
     flush_colorbar(im, ax=ax, label="log10(Density)")
@@ -48,7 +48,6 @@ def test_mhd_blast(num_mpi_ranks):
         B = F["PartType0/MagneticField"][:]
         boxsize = F["Header"].attrs["BoxSize"]
 
-<<<<<<< HEAD
     # Plot density using Meshoid slice interpolation
     M = Meshoid(pos, boxsize=1.0)
     rho_slice = M.Slice(np.log10(rho), res=2048, plane="z", center=np.array([0.5, 0.5, 0.5]), size=1.0)
@@ -60,9 +59,6 @@ def test_mhd_blast(num_mpi_ranks):
     plt.title("MHD Blast - Density")
     plt.savefig(f"test/{test_name}/Density_2D.png", dpi=150)
     plt.close()
-=======
-    plot_mhd_blast_density_slice(pos, rho, output_dir=f"test/{test_name}")
->>>>>>> a91bdfb02a5a120dbff87833eed31a92b114a7da
 
     # Load initial snapshot for conservation check
     with h5py.File(snaps[0], "r") as F:

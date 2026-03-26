@@ -13,7 +13,14 @@ import glob
 from os import path, chdir
 from urllib.request import urlretrieve
 from meshoid import Meshoid
-from gizmo.test import build_gizmo_for_test, download_test_files, run_test, default_mpi_ranks, clean_test_outputs, flush_colorbar
+from gizmo.test import (
+    build_gizmo_for_test,
+    download_test_files,
+    run_test,
+    default_mpi_ranks,
+    clean_test_outputs,
+    flush_colorbar,
+)
 
 
 WEBSITE = "http://www.tapir.caltech.edu/~phopkins/sims/"
@@ -50,7 +57,6 @@ def test_rt(num_mpi_ranks):
     # Plot final density using Meshoid slice interpolation
     # BoxSize=0.5, BOX_LONG_X=1, BOX_LONG_Y=2 -> box is 0.5 x 1.0
     M = Meshoid(pos_f, boxsize=0.5)
-<<<<<<< HEAD
     rho_slice = M.Slice(rho_f, res=512, plane="z", center=np.array([0.25, 0.5, 0.25]), size=0.5)
     plt.figure(figsize=(4, 8))
     plt.imshow(rho_slice.T, origin="lower", cmap="viridis", extent=[0, 0.5, 0, 1.0])
@@ -60,17 +66,6 @@ def test_rt(num_mpi_ranks):
     plt.title("Rayleigh-Taylor Instability")
     plt.savefig(f"test/{test_name}/Density_2D.png", dpi=150)
     plt.close()
-=======
-    rho_slice = M.Slice(rho_f, res=512, plane="z", center=np.array([0.25, 0.5, 0.25]), size=0.5, order=1)
-    fig, ax = plt.subplots(figsize=(4, 8))
-    im = ax.imshow(rho_slice.T, origin="lower", cmap="viridis", extent=[0, 0.5, 0, 1.0])
-    flush_colorbar(im, ax=ax, label="Density")
-    ax.set_xlabel("x")
-    ax.set_ylabel("y")
-    ax.set_title("Rayleigh-Taylor Instability")
-    fig.savefig(f"test/{test_name}/Density_2D.png", dpi=150, bbox_inches="tight")
-    plt.close(fig)
->>>>>>> a91bdfb02a5a120dbff87833eed31a92b114a7da
 
     # Mass conservation
     mass_err = abs(mass_f.sum() - mass0.sum()) / mass0.sum()

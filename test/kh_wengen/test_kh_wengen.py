@@ -42,7 +42,6 @@ def test_kh_wengen(num_mpi_ranks):
     box_z = boxsize * 2
     M = Meshoid(pos_f, boxsize=boxsize)
     center = np.array([box_x / 2, box_y / 2, box_z / 2])
-<<<<<<< HEAD
     rho_slice = M.Slice(rho_f, res=2048, plane="z", center=center, size=box_x)
     plt.figure(figsize=(8, 8))
     plt.imshow(rho_slice.T, origin="lower", cmap="viridis", extent=[0, box_x, 0, box_y])
@@ -52,17 +51,6 @@ def test_kh_wengen(num_mpi_ranks):
     plt.title("KH Wengen - Density (midplane slice)")
     plt.savefig(f"test/{test_name}/Density_slice.png", dpi=150)
     plt.close()
-=======
-    rho_slice = M.Slice(rho_f, res=1024, plane="z", center=center, size=box_x, order=1)
-    fig, ax = plt.subplots(figsize=(8, 8))
-    im = ax.imshow(rho_slice.T, origin="lower", cmap="viridis", extent=[0, box_x, 0, box_y])
-    flush_colorbar(im, ax=ax, label="Density")
-    ax.set_xlabel("x")
-    ax.set_ylabel("y")
-    ax.set_title("KH Wengen - Density (midplane slice)")
-    fig.savefig(f"test/{test_name}/Density_slice.png", dpi=150, bbox_inches="tight")
-    plt.close(fig)
->>>>>>> a91bdfb02a5a120dbff87833eed31a92b114a7da
 
     # Mass conservation
     mass_err = abs(mass_f.sum() - mass0.sum()) / mass0.sum()
