@@ -12,6 +12,7 @@ import h5py
 import glob
 from os import path, chdir
 from meshoid import Meshoid
+<<<<<<< HEAD
 from gizmo.test import (
     build_gizmo_for_test,
     download_test_files,
@@ -20,6 +21,9 @@ from gizmo.test import (
     clean_test_outputs,
     get_cooling_tables,
 )
+=======
+from gizmo.test import build_gizmo_for_test, download_test_files, run_test, default_mpi_ranks, clean_test_outputs, get_cooling_tables, flush_colorbar
+>>>>>>> a91bdfb02a5a120dbff87833eed31a92b114a7da
 
 
 @pytest.mark.parametrize("num_mpi_ranks", (default_mpi_ranks(),))
@@ -55,6 +59,7 @@ def test_isodisk(num_mpi_ranks):
     # Plot face-on view of the disk using Meshoid slice interpolation
     M = Meshoid(pos_f, boxsize=boxsize)
     disk_center = np.array([center, center, center])
+<<<<<<< HEAD
     rho_slice = M.Slice(np.log10(rho_f), res=2048, plane="z", center=disk_center, size=60.0)
     plt.figure(figsize=(6, 6))
     plt.imshow(rho_slice.T, origin="lower", cmap="inferno", extent=[-30, 30, -30, 30])
@@ -64,6 +69,17 @@ def test_isodisk(num_mpi_ranks):
     plt.title("Isolated Disk - Face-on")
     plt.savefig(f"test/{test_name}/Density_faceon.png", dpi=150)
     plt.close()
+=======
+    rho_slice = M.Slice(np.log10(rho_f), res=1024, plane="z", center=disk_center, size=60., order=1)
+    fig, ax = plt.subplots(figsize=(6, 6))
+    im = ax.imshow(rho_slice.T, origin="lower", cmap="inferno", extent=[-30, 30, -30, 30])
+    flush_colorbar(im, ax=ax, label="log10(Density)")
+    ax.set_xlabel("x (kpc)")
+    ax.set_ylabel("y (kpc)")
+    ax.set_title("Isolated Disk - Face-on")
+    fig.savefig(f"test/{test_name}/Density_faceon.png", dpi=150, bbox_inches="tight")
+    plt.close(fig)
+>>>>>>> a91bdfb02a5a120dbff87833eed31a92b114a7da
 
     # Mass conservation
     mass_err = abs(mass_f.sum() - mass0.sum()) / mass0.sum()
