@@ -36,13 +36,13 @@ def test_kh_wengen(num_mpi_ranks):
 
     # Plot a slice through the midplane using Meshoid slice interpolation
     # BoxSize=8, BOX_LONG_X=32, BOX_LONG_Y=32, BOX_LONG_Z=2 -> box is 256 x 256 x 16
-    boxsize = 8.
+    boxsize = 8.0
     box_x = boxsize * 32
     box_y = boxsize * 32
     box_z = boxsize * 2
     M = Meshoid(pos_f, boxsize=boxsize)
     center = np.array([box_x / 2, box_y / 2, box_z / 2])
-    rho_slice = M.Slice(rho_f, res=1024, plane="z", center=center, size=box_x, order=1)
+    rho_slice = M.Slice(rho_f, res=2048, plane="z", center=center, size=box_x)
     plt.figure(figsize=(8, 8))
     plt.imshow(rho_slice.T, origin="lower", cmap="viridis", extent=[0, box_x, 0, box_y])
     plt.colorbar(label="Density")

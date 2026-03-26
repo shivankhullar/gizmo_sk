@@ -32,12 +32,12 @@ def test_ring_collision(num_mpi_ranks):
             pos = F["PartType0/Coordinates"][:]
             rho = F["PartType0/Density"][:]
             t = F["Header"].attrs["Time"]
-        center = np.array([pos[:, 0].mean(), pos[:, 1].mean(), pos[:, 2].mean() if pos.shape[1] > 2 else 0.])
+        center = np.array([pos[:, 0].mean(), pos[:, 1].mean(), pos[:, 2].mean() if pos.shape[1] > 2 else 0.0])
         size = max(pos[:, 0].max() - pos[:, 0].min(), pos[:, 1].max() - pos[:, 1].min()) * 1.1
         M = Meshoid(pos)
-        rho_slice = M.Slice(rho, res=1024, plane="z", center=center, size=size, order=1)
+        rho_slice = M.Slice(rho, res=2048, plane="z", center=center, size=size)
         plt.figure(figsize=(6, 6))
-        extent = [center[0] - size/2, center[0] + size/2, center[1] - size/2, center[1] + size/2]
+        extent = [center[0] - size / 2, center[0] + size / 2, center[1] - size / 2, center[1] + size / 2]
         plt.imshow(rho_slice.T, origin="lower", cmap="viridis", extent=extent)
         plt.colorbar(label="Density")
         plt.xlabel("x")
@@ -63,6 +63,4 @@ def test_ring_collision(num_mpi_ranks):
     # (they started moving toward each other, collided, and bounced back)
     x_spread0 = pos0[:, 0].max() - pos0[:, 0].min()
     x_spread_f = pos_f[:, 0].max() - pos_f[:, 0].min()
-    assert x_spread_f > 0.5 * x_spread0, (
-        "Rings appear to have collapsed rather than bouncing"
-    )
+    assert x_spread_f > 0.5 * x_spread0, "Rings appear to have collapsed rather than bouncing"

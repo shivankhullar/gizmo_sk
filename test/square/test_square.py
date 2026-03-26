@@ -36,8 +36,8 @@ def test_square(num_mpi_ranks):
         pos_f = F["PartType0/Coordinates"][:]
 
     # Plot final density using Meshoid slice interpolation
-    M = Meshoid(pos_f, boxsize=1.)
-    rho_slice = M.Slice(rho_f, res=1024, plane="z", center=np.array([0.5, 0.5, 0.5]), size=1., order=1)
+    M = Meshoid(pos_f, boxsize=1.0)
+    rho_slice = M.Slice(rho_f, res=2048, plane="z", center=np.array([0.5, 0.5, 0.5]), size=1.0)
     plt.figure(figsize=(6, 6))
     plt.imshow(rho_slice.T, origin="lower", cmap="viridis", extent=[0, 1, 0, 1])
     plt.colorbar(label="Density")
@@ -58,9 +58,7 @@ def test_square(num_mpi_ranks):
     contrast_f = rho_f_sorted.max() / rho_f_sorted.min()
 
     # MFM should preserve the density contrast very well
-    assert contrast_f > 0.5 * contrast0, (
-        f"Density contrast degraded too much: {contrast0:.2f} -> {contrast_f:.2f}"
-    )
+    assert contrast_f > 0.5 * contrast0, f"Density contrast degraded too much: {contrast0:.2f} -> {contrast_f:.2f}"
 
     # Mass conservation
     mass_err = abs(mass_f.sum() - mass0.sum()) / mass0.sum()

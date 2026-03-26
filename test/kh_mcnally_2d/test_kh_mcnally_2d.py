@@ -36,8 +36,8 @@ def test_kh_mcnally_2d(num_mpi_ranks):
         pos_f = F["PartType0/Coordinates"][:]
 
     # Plot final density using Meshoid slice interpolation
-    M = Meshoid(pos_f, boxsize=1.)
-    rho_slice = M.Slice(rho_f, res=1024, plane="z", center=np.array([0.5, 0.5, 0.5]), size=1., order=1)
+    M = Meshoid(pos_f, boxsize=1.0)
+    rho_slice = M.Slice(rho_f, res=2048, plane="z", center=np.array([0.5, 0.5, 0.5]), size=1.0)
     plt.figure(figsize=(6, 6))
     plt.imshow(rho_slice.T, origin="lower", cmap="viridis", extent=[0, 1, 0, 1])
     plt.colorbar(label="Density")

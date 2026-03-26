@@ -45,11 +45,16 @@ def test_orszag_tang(num_mpi_ranks):
     with h5py.File(final_snap, "r") as F:
         coords = F["PartType0/Coordinates"][:]
         rho = F["PartType0/Density"][:]
-    M = Meshoid(coords, boxsize=1.)
-    rho_slice = M.Slice(np.log10(rho), res=1024, plane="z",center=np.array([0.5,0.5,0.5]),size=1.,order=1)
+    M = Meshoid(coords, boxsize=1.0)
+    rho_slice = M.Slice(np.log10(rho), res=2048, plane="z", center=np.array([0.5, 0.5, 0.5]), size=1.0)
 
     plt.figure(figsize=(6, 6))
-    plt.imshow(rho_slice.T, origin="lower", cmap="viridis", extent=[coords[:,0].min(), coords[:,0].max(), coords[:,1].min(), coords[:,1].max()])
+    plt.imshow(
+        rho_slice.T,
+        origin="lower",
+        cmap="viridis",
+        extent=[coords[:, 0].min(), coords[:, 0].max(), coords[:, 1].min(), coords[:, 1].max()],
+    )
     plt.colorbar(label="log10(Density)")
     plt.xlabel("x")
     plt.ylabel("y")

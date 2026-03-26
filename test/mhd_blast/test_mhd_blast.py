@@ -35,8 +35,8 @@ def test_mhd_blast(num_mpi_ranks):
         boxsize = F["Header"].attrs["BoxSize"]
 
     # Plot density using Meshoid slice interpolation
-    M = Meshoid(pos, boxsize=1.)
-    rho_slice = M.Slice(np.log10(rho), res=1024, plane="z", center=np.array([0.5, 0.5, 0.5]), size=1., order=1)
+    M = Meshoid(pos, boxsize=1.0)
+    rho_slice = M.Slice(np.log10(rho), res=2048, plane="z", center=np.array([0.5, 0.5, 0.5]), size=1.0)
     plt.figure(figsize=(6, 6))
     plt.imshow(rho_slice.T, origin="lower", cmap="inferno", extent=[0, 1, 0, 1])
     plt.colorbar(label="log10(Density)")
