@@ -62,10 +62,24 @@ inline int& check_pass_count() { static int n = 0; return n; }
     } \
 } while(0)
 
+#include <cstring>
+
 #define TEST_MAIN() \
-int main() { \
-    int total_failures = 0; \
+int main(int argc, char* argv[]) { \
+    /* --list: print all test names, one per line, and exit */ \
+    if (argc >= 2 && std::strcmp(argv[1], "--list") == 0) { \
+        for (auto& tc : test_registry()) \
+            std::fprintf(stdout, "%s\n", tc.name); \
+        return 0; \
+    } \
+    /* --run <name>: run only the named test */ \
+    const char* run_only = nullptr; \
+    if (argc >= 3 && std::strcmp(argv[1], "--run") == 0) \
+        run_only = argv[2]; \
+    int total_failures = 0, ran = 0; \
     for (auto& tc : test_registry()) { \
+        if (run_only && std::strcmp(tc.name, run_only) != 0) continue; \
+        ran++; \
         check_fail_count() = 0; \
         check_pass_count() = 0; \
         tc.func(); \
@@ -77,10 +91,14 @@ int main() { \
             std::fprintf(stdout, "  ok: %s (%d checks)\n", tc.name, p); \
         } \
     } \
+    if (run_only && ran == 0) { \
+        std::fprintf(stderr, "No test named \"%s\"\n", run_only); \
+        return 1; \
+    } \
     if (total_failures > 0) { \
         std::fprintf(stderr, "\n%d check(s) FAILED\n", total_failures); \
         return 1; \
     } \
-    std::fprintf(stdout, "\nAll %zu test(s) passed.\n", test_registry().size()); \
+    std::fprintf(stdout, "\nAll %d test(s) passed.\n", ran); \
     return 0; \
 }

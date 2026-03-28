@@ -7,6 +7,7 @@
 #include "../declarations/allvars.h"
 #include "../core/proto.h"
 #include "../mesh/kernel.h"
+#include "../system/rootfind.h"
 
 /*! \file rt_utilities.c
  *  \brief useful functions for radiation modules
@@ -1370,11 +1371,12 @@ double dust_dE_cooling(int i, double Tgas, double Tdust, double* Tdust_fixedpoin
 double rt_ir_lambdadust(int i, double T){
     double Tdust, T_lower, T_upper, dE, dE1, dE2, dE_lower, dE_upper, dE_guess, dTdust_tol=1e-6;
     double Tdust_fixedpoint_1, Tdust_fixedpoint_2, dummy;
-    // define ROOTFIND_FUNCTION_INNER because this gets called nested inside the cooling solver, and needs to be def'd distinctly from the overlying ROOTFIND_FUNCTION
-    #define ROOTFIND_FUNCTION_INNER(dTdust) dust_dE_cooling(i, T, T+dTdust, &Tdust_fixedpoint_1, &Tdust_fixedpoint_2)
+    auto dust_dE_func = [&](double dTdust) -> double {
+        return dust_dE_cooling(i, T, T+dTdust, &Tdust_fixedpoint_1, &Tdust_fixedpoint_2);
+    };
     if((All.Time==0 )|| (!isfinite(CellP[i].Dust_Temperature))) {Tdust=T;} else {Tdust = DMIN(MAX_DUST_TEMP, CellP[i].Dust_Temperature);}
 
-    dE = dE_guess = ROOTFIND_FUNCTION_INNER(Tdust-T);
+    dE = dE_guess = dust_dE_func(Tdust-T);
     //if(CellP[i].Dust_Temperature >= MAX_DUST_TEMP && dE > 0) {return 0;}
     if(Tdust_fixedpoint_1 <= 0) {Tdust_fixedpoint_1 = T;} // this means overshot to <0 from dust-gas coupling term, so set to equilibrium with gas temp as a guess
     if(Tdust_fixedpoint_1 > MAX_DUST_TEMP) {Tdust_fixedpoint_1 = MAX_DUST_TEMP;} // cap the guess
@@ -1383,22 +1385,22 @@ double rt_ir_lambdadust(int i, double T){
     if(Tdust_fixedpoint_2 > 0 && Tdust_fixedpoint_2 <= MAX_DUST_TEMP) {dE2 =  dust_dE_cooling(i, T, Tdust_fixedpoint_2, &dummy, &dummy);} else {dE2 = MAX_REAL_NUMBER;}
 
     // error estimate of the fixed-point guesses, used for bracketing below
-    double fixedpoint_error = DMIN(fabs(Tdust-Tdust_fixedpoint_2), fabs(Tdust-Tdust_fixedpoint_1))/Tdust; 
+    double fixedpoint_error = DMIN(fabs(Tdust-Tdust_fixedpoint_2), fabs(Tdust-Tdust_fixedpoint_1))/Tdust;
     if(fabs(dE1) < fabs(dE)){Tdust = Tdust_fixedpoint_1; dE=dE_guess=dE1;}
     if(fabs(dE2) < fabs(dE)){Tdust = Tdust_fixedpoint_2; dE=dE_guess=dE2;}
-    
+
     /* bracketing the dust temperature */
     int n_iter = 0;
     if(dE < 0)
     {
         double scalefac = DMAX(0.9, 1-fixedpoint_error);
         T_upper = Tdust;
-        dE_upper = dE_guess; 
+        dE_upper = dE_guess;
         while(dE < 0) {
-            Tdust *= scalefac; 
-            dE = ROOTFIND_FUNCTION_INNER(Tdust-T);
+            Tdust *= scalefac;
+            dE = dust_dE_func(Tdust-T);
             if(dE==0){break;}
-            scalefac *= 0.9; 
+            scalefac *= 0.9;
             n_iter++;
         }
         T_lower = Tdust, dE_lower = dE;
@@ -1407,23 +1409,20 @@ double rt_ir_lambdadust(int i, double T){
         double scalefac = DMIN(1.1, 1+fixedpoint_error);
         while(dE > 0 && Tdust < MAX_DUST_TEMP) {
             Tdust *= scalefac; Tdust = DMIN(Tdust,MAX_DUST_TEMP);
-            dE = ROOTFIND_FUNCTION_INNER(Tdust-T); 
+            dE = dust_dE_func(Tdust-T);
             if(dE==0){break;}
-            scalefac *= 1.1; 
+            scalefac *= 1.1;
             n_iter++;
         }
         T_upper = Tdust, dE_upper = dE;
-    }     
+    }
     if(T_upper>=MAX_DUST_TEMP && dE_upper > 0) {CellP[i].Dust_Temperature = MAX_DUST_TEMP; return 0;}
 
     if(dE_lower * dE_upper > 0) {PRINT_WARNING("Failed to bracket Tdust solution for ID=%lld T=%g T_lower=%g T_upper=%g dE_lower=%g dE_upper=%g\n", (long long)P[i].ID, T, T_lower,T_upper, dE_lower, dE_upper);}
 
     if(dE!=0){  // root-solve for Tdust
-        double ROOTFIND_X_a = T_lower-T, ROOTFIND_X_b = T_upper-T;
-        double ROOTFUNC_a = dE_lower; double ROOTFUNC_b = dE_upper;
-        double ROOTFIND_REL_X_tol = dTdust_tol, ROOTFIND_ABS_X_tol=0.;
-        #include "../system/bracketed_rootfind.h"
-        Tdust = ROOTFIND_X_new+T;
+        auto result = brent_root(dust_dE_func, T_lower-T, T_upper-T, dE_lower, dE_upper, dTdust_tol, 0.);
+        Tdust = result.root+T;
     }
     double LambdaDust = gas_dust_heating_coeff(i,T,Tdust) * (T-Tdust);
     CellP[i].Lambda_RadiativeCooling_toRHDBins[RT_FREQ_BIN_INFRARED] += LambdaDust;
@@ -1527,43 +1526,27 @@ double rt_eqm_dust_temp(int i, double T, double dust_absorption_rate)
     if(T_upper==Tmax && dEdt_upper > 0) {return Tmax;}
     if(T_lower>=Tmax) {return Tmax;}
 
+    auto dust_dEdt_func = [&](double Td) -> double {
+        return dust_dEdt(i, T, Td, dust_absorption_rate, fdustmet_init);
+    };
+
 #if (0) && !defined(SINGLE_STAR_AND_SSP_NUCLEAR_ZOOM_SPECIALBOUNDARIES)  // PFH: still testing which option is better, but the new rootfind struggles here, in hyper-zoom-in runs when given dust close to max temperature (raising max temp resolves the failure to converge or Nan's but then jumps to very high solutions somewhat randomly, where it shouldnt. The old secant routine below appears stable and more robust in this particular instance for now.
-    #define ROOTFIND_FUNCTION(dTdust) dust_dEdt(i,T,T+dTdust,dust_absorption_rate,fdustmet_init); // here we want to converge on a relative tolerance for Tdust-Tgas
     if(dEdt!=0)
     {
-        double ROOTFIND_X_a = T_lower-T, ROOTFIND_X_b = T_upper-T, ROOTFUNC_a = dEdt_lower, ROOTFUNC_b = dEdt_upper, ROOTFIND_REL_X_tol = 1e-6, ROOTFIND_ABS_X_tol=0.;
-        #include "../system/bracketed_rootfind.h"
-        Tdust = ROOTFIND_X_new + T;
-        if(ROOTFIND_ITER > MAXITER || isnan(Tdust)){PRINT_WARNING("WARNING: Particle %lld did not converge to desired Tdust tolerance (iter=%d, Tdust=%g, Tgas=%g)\n",(long long)P[i].ID,ROOTFIND_ITER,Tdust,T);}
+        auto result = brent_root([&](double dTdust) { return dust_dEdt_func(T+dTdust); },
+                                 T_lower-T, T_upper-T, dEdt_lower, dEdt_upper, 1e-6, 0.);
+        Tdust = result.root + T;
+        if(result.iterations > MAXITER || isnan(Tdust)){PRINT_WARNING("WARNING: Particle %lld did not converge to desired Tdust tolerance (iter=%d, Tdust=%g, Tgas=%g)\n",(long long)P[i].ID,result.iterations,Tdust,T);}
     }
 #else
 
-    T_old = Tdust; double dEdt_old = dEdt; Tdust = Tdust_guess; dEdt = dEdt_guess; // For our second guess we take the backeting value opposite of the initial guess.
-    double dT_dustgas = T-Tdust;
-    do  // secant method iterations with bisection as a backup; usually converges to machine epsilon in 4-5 iterations
-    {
-        dT_dustgas = T - Tdust;
-        T_secant = Tdust - dEdt * (Tdust - T_old) / (dEdt - dEdt_old);
-        T_secant = DMAX(DMIN(T_secant,T_upper),T_lower);
-        dEdt_old = dEdt;
-        dEdt = dust_dEdt(i,T,T_secant,dust_absorption_rate,fdustmet_init);
-        fac = fabs(T_secant - Tdust)/(MIN_REAL_NUMBER+fabs(Tdust-T_old)); //fabs(dEdt)/(MIN_REAL_NUMBER+fabs(dEdt_old));
-        if(fac < 0.5) { // accept the secant iteration if it is converging more rapidly
-            T_old=Tdust;
-            Tdust=T_secant;
-        } else { // if secant isn't working do bisection iteration instead; guaranteed to reduce the error
-            T_old = Tdust;
-            Tdust = sqrt(T_lower*T_upper);
-            dEdt = dust_dEdt(i,T,Tdust,dust_absorption_rate,fdustmet_init);
-            fac = 0.5;
+    { // secant method iterations with bisection as a backup; usually converges to machine epsilon in 4-5 iterations
+        auto result = secant_root(dust_dEdt_func, Tdust, Tdust_guess, dEdt, dEdt_guess, T_lower, T_upper, 1.e-3);
+        Tdust = result.root;
+        if(result.iterations > MAXITER-10) {
+            PRINT_WARNING("Warning: Dust temperature iteration converging slowly: ID=%lld iter=%d T=%g Tdust=%g Tdust_guess=%g T_upper=%g T_lower=%g.\n",(long long)P[i].ID,result.iterations,T,Tdust,Tdust_guess, T_upper, T_lower);
         }
-        if(dEdt>0) {T_lower=Tdust;} else {T_upper=Tdust;} // either way, update upper and lower bounds
-        n_iter++;
-        if(n_iter > MAXITER-10) {
-            PRINT_WARNING("Warning: Dust temperature iteration converging slowly: ID=%lld iter=%d T=%g Tdust=%g Tdust_guess=%g T_upper=%g T_lower=%g dEdt=%g fac=%g.\n",(long long)P[i].ID,n_iter,T,Tdust,Tdust_guess, T_upper, T_lower,dEdt, fac);
-            if(n_iter > MAXITER){break;}
-        }
-    } while(fabs(dT_dustgas - (T-Tdust)) > 1.e-3 * fabs(T-Tdust)); // sufficient to converge dust cooling to 10^-3 tolerance, at this point uncertainties in dust properties will dominate the error budget
+    }
 
 #endif
     
