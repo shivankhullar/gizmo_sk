@@ -100,6 +100,7 @@ be copy-pasted and can be generically optimized in a single place */
 
         /* ok now we have to figure out if there is enough memory to handle all the tasks sending us their data, and if not, break it into sub-chunks */
         int N_chunks_for_import, ngrp_initial, ngrp;
+        MPI_Request *mpi_requests = (MPI_Request *) malloc(2 * (1 << PTask) * sizeof(MPI_Request)); /* request handles for non-blocking comm */
         for(ngrp_initial = 1; ngrp_initial < (1 << PTask); ngrp_initial += N_chunks_for_import) /* sub-chunking loop opener */
         {
             int flagall;
@@ -124,24 +125,32 @@ be copy-pasted and can be generically optimized in a single place */
             DATAGET_NAME = (struct INPUT_STRUCT_NAME *) mymalloc("DATAGET_NAME", Nimport * sizeof(struct INPUT_STRUCT_NAME));
             DATARESULT_NAME = (struct OUTPUT_STRUCT_NAME *) mymalloc("DATARESULT_NAME", Nimport * sizeof(struct OUTPUT_STRUCT_NAME));
 
-            tstart = my_second(); Nimport = 0; /* reset because this will be cycled below to calculate the recieve offsets (Recv_offset) */
-            for(ngrp = ngrp_initial; ngrp < ngrp_initial + N_chunks_for_import; ngrp++) /* exchange particle data */
+            /* Phase 1: post all non-blocking receives and sends for import data. By issuing all
+               Irecv/Isend up front instead of sequential Sendrecv, the MPI library can schedule
+               all pairwise exchanges concurrently, eliminating hypercube serialization overhead. */
+            tstart = my_second(); Nimport = 0; int nrequests = 0;
+            for(ngrp = ngrp_initial; ngrp < ngrp_initial + N_chunks_for_import; ngrp++)
             {
                 recvTask = ThisTask ^ ngrp;
                 if(recvTask < NTask)
                 {
-                    if(Send_count[recvTask] > 0 || Recv_count[recvTask] > 0) /* get the particles */
-                    {
-                        MPI_Sendrecv(&DATAIN_NAME[Send_offset[recvTask]], Send_count[recvTask] * sizeof(struct INPUT_STRUCT_NAME), MPI_BYTE, recvTask, TAG_MPI_GENERIC_COM_BUFFER_A,
-                                     &DATAGET_NAME[Nimport], Recv_count[recvTask] * sizeof(struct INPUT_STRUCT_NAME), MPI_BYTE, recvTask, TAG_MPI_GENERIC_COM_BUFFER_A,
-                                     MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-                        Nimport += Recv_count[recvTask];
+                    if(Recv_count[recvTask] > 0) {
+                        MPI_Irecv(&DATAGET_NAME[Nimport], Recv_count[recvTask] * sizeof(struct INPUT_STRUCT_NAME),
+                                  MPI_BYTE, recvTask, TAG_MPI_GENERIC_COM_BUFFER_A,
+                                  MPI_COMM_WORLD, &mpi_requests[nrequests++]);
                     }
+                    if(Send_count[recvTask] > 0) {
+                        MPI_Isend(&DATAIN_NAME[Send_offset[recvTask]], Send_count[recvTask] * sizeof(struct INPUT_STRUCT_NAME),
+                                  MPI_BYTE, recvTask, TAG_MPI_GENERIC_COM_BUFFER_A,
+                                  MPI_COMM_WORLD, &mpi_requests[nrequests++]);
+                    }
+                    Nimport += Recv_count[recvTask];
                 }
             }
+            MPI_Waitall(nrequests, mpi_requests, MPI_STATUSES_IGNORE);
             tend = my_second(); timecomm += timediff(tstart, tend);
 
-            /* now do the particles that were sent to us */
+            /* Phase 2: compute on the imported particles */
             tstart = my_second(); NextJ = 0;
 #ifdef _OPENMP
 #pragma omp parallel
@@ -154,29 +163,34 @@ be copy-pasted and can be generically optimized in a single place */
 #endif
                 SECONDARY_SUBFUN_NAME(&mainthreadid, loop_iteration);
             }
-            tend = my_second(); timecomp += timediff(tstart, tend); tstart = my_second();
-            MPI_Barrier(MPI_COMM_WORLD); /* insert MPI Barrier here - will be forced by comms below anyways but this allows for clean timing measurements */
-            tend = my_second(); timewait += timediff(tstart, tend);
+            tend = my_second(); timecomp += timediff(tstart, tend);
 
-            tstart = my_second(); Nimport = 0;
-            for(ngrp = ngrp_initial; ngrp < ngrp_initial + N_chunks_for_import; ngrp++) /* send the results for imported elements back to their host tasks */
+            /* Phase 3: post all non-blocking sends/receives for result data exchange */
+            tstart = my_second(); Nimport = 0; nrequests = 0;
+            for(ngrp = ngrp_initial; ngrp < ngrp_initial + N_chunks_for_import; ngrp++)
             {
                 recvTask = ThisTask ^ ngrp;
                 if(recvTask < NTask)
                 {
-                    if(Send_count[recvTask] > 0 || Recv_count[recvTask] > 0)
-                    {
-                        MPI_Sendrecv(&DATARESULT_NAME[Nimport], Recv_count[recvTask] * sizeof(struct OUTPUT_STRUCT_NAME), MPI_BYTE, recvTask, TAG_MPI_GENERIC_COM_BUFFER_B,
-                                     &DATAOUT_NAME[Send_offset[recvTask]], Send_count[recvTask] * sizeof(struct OUTPUT_STRUCT_NAME), MPI_BYTE, recvTask, TAG_MPI_GENERIC_COM_BUFFER_B,
-                                     MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-                        Nimport += Recv_count[recvTask];
+                    if(Recv_count[recvTask] > 0) {
+                        MPI_Isend(&DATARESULT_NAME[Nimport], Recv_count[recvTask] * sizeof(struct OUTPUT_STRUCT_NAME),
+                                  MPI_BYTE, recvTask, TAG_MPI_GENERIC_COM_BUFFER_B,
+                                  MPI_COMM_WORLD, &mpi_requests[nrequests++]);
                     }
+                    if(Send_count[recvTask] > 0) {
+                        MPI_Irecv(&DATAOUT_NAME[Send_offset[recvTask]], Send_count[recvTask] * sizeof(struct OUTPUT_STRUCT_NAME),
+                                  MPI_BYTE, recvTask, TAG_MPI_GENERIC_COM_BUFFER_B,
+                                  MPI_COMM_WORLD, &mpi_requests[nrequests++]);
+                    }
+                    Nimport += Recv_count[recvTask];
                 }
             }
+            MPI_Waitall(nrequests, mpi_requests, MPI_STATUSES_IGNORE);
             tend = my_second(); timecomm += timediff(tstart, tend);
             myfree(DATARESULT_NAME); myfree(DATAGET_NAME); /* free the structures used to send data back to tasks, its sent */
 
         } /* close the sub-chunking loop: for(ngrp_initial = 1; ngrp_initial < (1 << PTask); ngrp_initial += N_chunks_for_import) */
+        free(mpi_requests);
 
         /* we have all our results back from the elements we exported: add the result to the local elements */
         tstart = my_second();
