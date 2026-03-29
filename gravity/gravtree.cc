@@ -269,7 +269,10 @@ void gravity_tree(void)
 
             /* ok now we have to figure out if there is enough memory to handle all the tasks sending us their data, and if not, break it into sub-chunks */
             int N_chunks_for_import, ngrp_initial, ngrp;
-            MPI_Request *mpi_requests = (MPI_Request *) malloc(2 * (1 << PTask) * sizeof(MPI_Request)); /* request handles for non-blocking comm */
+            int max_ngrp = (1 << PTask);
+            MPI_Request *mpi_reqs_import = (MPI_Request *) malloc(max_ngrp * sizeof(MPI_Request));
+            MPI_Request *mpi_reqs_export = (MPI_Request *) malloc(max_ngrp * sizeof(MPI_Request));
+            MPI_Request *mpi_reqs_result = (MPI_Request *) malloc(2 * max_ngrp * sizeof(MPI_Request));
             for(ngrp_initial = 1; ngrp_initial < (1 << PTask); ngrp_initial += N_chunks_for_import) /* sub-chunking loop opener */
             {
                 int flagall;
@@ -289,12 +292,27 @@ void gravity_tree(void)
                 if(N_chunks_for_import == 0) {printf("Memory is insufficient for even one import-chunk: N_chunks_for_import=%d  ngrp_initial=%d  Nimport=%ld  FreeBytes=%lld , but we need to allocate=%lld \n",N_chunks_for_import, ngrp_initial, Nimport, (long long)FreeBytes,(long long)(Nimport * sizeof(struct gravdata_in) + Nimport * sizeof(struct gravdata_out) + 16384)); endrun(9966);}
                 if(flagall) {if(ThisTask==0) PRINT_WARNING("Splitting import operation into sub-chunks as we are hitting memory limits (check this isn't imposing large communication cost)");}
 
-                /* now allocated the import and results buffers */
+                /* now allocate the import and results buffers */
                 GravDataGet = (struct gravdata_in *) mymalloc("GravDataGet", Nimport * sizeof(struct gravdata_in));
                 GravDataResult = (struct gravdata_out *) mymalloc("GravDataResult", Nimport * sizeof(struct gravdata_out));
 
-                /* Phase 1: post all non-blocking receives and sends for import data */
-                tstart = my_second(); Nimport = 0; int nrequests = 0;
+                /* Pipelined communication-computation overlap (see code_block_xchange_perform_ops.h) */
+                long Nimport_total = Nimport, Nimport_half1 = 0;
+                int half_boundary = ngrp_initial + N_chunks_for_import;
+                {
+                    long half_target = Nimport_total / 2, running = 0;
+                    for(ngrp = ngrp_initial; ngrp < ngrp_initial + N_chunks_for_import; ngrp++) {
+                        recvTask = ThisTask ^ ngrp;
+                        if(recvTask < NTask) {running += Recv_count[recvTask];}
+                        if(running >= half_target) {half_boundary = ngrp + 1; Nimport_half1 = running; break;}
+                    }
+                    if(half_boundary == ngrp_initial + N_chunks_for_import) {Nimport_half1 = Nimport_total;}
+                }
+
+                /* Post ALL import Irecv's (both halves) and ALL export Isend's */
+                tstart = my_second();
+                int n_irecv = 0, n_irecv_half1 = 0, n_isend_export = 0;
+                Nimport = 0;
                 for(ngrp = ngrp_initial; ngrp < ngrp_initial + N_chunks_for_import; ngrp++)
                 {
                     recvTask = ThisTask ^ ngrp;
@@ -303,22 +321,24 @@ void gravity_tree(void)
                         if(Recv_count[recvTask] > 0) {
                             MPI_Irecv(&GravDataGet[Nimport], Recv_count[recvTask] * sizeof(struct gravdata_in),
                                       MPI_BYTE, recvTask, TAG_GRAV_A,
-                                      MPI_COMM_WORLD, &mpi_requests[nrequests++]);
+                                      MPI_COMM_WORLD, &mpi_reqs_import[n_irecv++]);
                         }
                         if(Send_count[recvTask] > 0) {
                             MPI_Isend(&GravDataIn[Send_offset[recvTask]], Send_count[recvTask] * sizeof(struct gravdata_in),
                                       MPI_BYTE, recvTask, TAG_GRAV_A,
-                                      MPI_COMM_WORLD, &mpi_requests[nrequests++]);
+                                      MPI_COMM_WORLD, &mpi_reqs_export[n_isend_export++]);
                         }
                         Nimport += Recv_count[recvTask];
                     }
+                    if(ngrp + 1 == half_boundary) {n_irecv_half1 = n_irecv;}
                 }
-                MPI_Waitall(nrequests, mpi_requests, MPI_STATUSES_IGNORE);
+
+                /* --- Half 1: wait for imports, compute, post results --- */
+                MPI_Waitall(n_irecv_half1, mpi_reqs_import, MPI_STATUSES_IGNORE);
                 tend = my_second(); timecommsumm1 += timediff(tstart, tend);
                 report_memory_usage(&HighMark_gravtree, "GRAVTREE");
 
-                /* Phase 2: compute on the imported particles */
-                tstart = my_second(); NextJ = 0;
+                tstart = my_second(); NextJ = 0; Nimport = Nimport_half1;
 #ifdef _OPENMP
 #pragma omp parallel
 #endif
@@ -332,32 +352,75 @@ void gravity_tree(void)
                 }
                 tend = my_second(); timetree2 += timediff(tstart, tend);
 
-                /* Phase 3: post all non-blocking sends/receives for result data exchange */
-                tstart = my_second(); Nimport = 0; nrequests = 0;
-                for(ngrp = ngrp_initial; ngrp < ngrp_initial + N_chunks_for_import; ngrp++)
+                int n_result_reqs = 0;
                 {
-                    recvTask = ThisTask ^ ngrp;
-                    if(recvTask < NTask)
-                    {
-                        if(Recv_count[recvTask] > 0) {
-                            MPI_Isend(&GravDataResult[Nimport], Recv_count[recvTask] * sizeof(struct gravdata_out),
-                                      MPI_BYTE, recvTask, TAG_GRAV_B,
-                                      MPI_COMM_WORLD, &mpi_requests[nrequests++]);
+                    long nimport_offset = 0;
+                    for(ngrp = ngrp_initial; ngrp < half_boundary; ngrp++) {
+                        recvTask = ThisTask ^ ngrp;
+                        if(recvTask < NTask) {
+                            if(Recv_count[recvTask] > 0) {
+                                MPI_Isend(&GravDataResult[nimport_offset], Recv_count[recvTask] * sizeof(struct gravdata_out),
+                                          MPI_BYTE, recvTask, TAG_GRAV_B,
+                                          MPI_COMM_WORLD, &mpi_reqs_result[n_result_reqs++]);
+                            }
+                            if(Send_count[recvTask] > 0) {
+                                MPI_Irecv(&GravDataOut[Send_offset[recvTask]], Send_count[recvTask] * sizeof(struct gravdata_out),
+                                          MPI_BYTE, recvTask, TAG_GRAV_B,
+                                          MPI_COMM_WORLD, &mpi_reqs_result[n_result_reqs++]);
+                            }
+                            nimport_offset += Recv_count[recvTask];
                         }
-                        if(Send_count[recvTask] > 0) {
-                            MPI_Irecv(&GravDataOut[Send_offset[recvTask]], Send_count[recvTask] * sizeof(struct gravdata_out),
-                                      MPI_BYTE, recvTask, TAG_GRAV_B,
-                                      MPI_COMM_WORLD, &mpi_requests[nrequests++]);
-                        }
-                        Nimport += Recv_count[recvTask];
                     }
                 }
-                MPI_Waitall(nrequests, mpi_requests, MPI_STATUSES_IGNORE);
+
+                /* --- Half 2: wait for imports, compute, post results --- */
+                tstart = my_second();
+                MPI_Waitall(n_irecv - n_irecv_half1, &mpi_reqs_import[n_irecv_half1], MPI_STATUSES_IGNORE);
+                tend = my_second(); timecommsumm1 += timediff(tstart, tend);
+
+                tstart = my_second(); NextJ = Nimport_half1; Nimport = Nimport_total;
+#ifdef _OPENMP
+#pragma omp parallel
+#endif
+                {
+#ifdef _OPENMP
+                    int mainthreadid = omp_get_thread_num();
+#else
+                    int mainthreadid = 0;
+#endif
+                    gravity_secondary_loop(&mainthreadid);
+                }
+                tend = my_second(); timetree2 += timediff(tstart, tend);
+
+                {
+                    long nimport_offset = Nimport_half1;
+                    for(ngrp = half_boundary; ngrp < ngrp_initial + N_chunks_for_import; ngrp++) {
+                        recvTask = ThisTask ^ ngrp;
+                        if(recvTask < NTask) {
+                            if(Recv_count[recvTask] > 0) {
+                                MPI_Isend(&GravDataResult[nimport_offset], Recv_count[recvTask] * sizeof(struct gravdata_out),
+                                          MPI_BYTE, recvTask, TAG_GRAV_B,
+                                          MPI_COMM_WORLD, &mpi_reqs_result[n_result_reqs++]);
+                            }
+                            if(Send_count[recvTask] > 0) {
+                                MPI_Irecv(&GravDataOut[Send_offset[recvTask]], Send_count[recvTask] * sizeof(struct gravdata_out),
+                                          MPI_BYTE, recvTask, TAG_GRAV_B,
+                                          MPI_COMM_WORLD, &mpi_reqs_result[n_result_reqs++]);
+                            }
+                            nimport_offset += Recv_count[recvTask];
+                        }
+                    }
+                }
+
+                /* Wait for all result exchanges and export sends to complete */
+                tstart = my_second();
+                MPI_Waitall(n_result_reqs, mpi_reqs_result, MPI_STATUSES_IGNORE);
+                MPI_Waitall(n_isend_export, mpi_reqs_export, MPI_STATUSES_IGNORE);
                 tend = my_second(); timecommsumm2 += timediff(tstart, tend);
-                myfree(GravDataResult); myfree(GravDataGet); /* free the structures used to send data back to tasks, its sent */
+                myfree(GravDataResult); myfree(GravDataGet);
 
             } /* close the sub-chunking loop: for(ngrp_initial = 1; ngrp_initial < (1 << PTask); ngrp_initial += N_chunks_for_import) */
-            free(mpi_requests);
+            free(mpi_reqs_result); free(mpi_reqs_export); free(mpi_reqs_import);
 
             /* we have all our results back from the elements we exported: add the result to the local elements */
             tstart = my_second();
