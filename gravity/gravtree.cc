@@ -98,7 +98,7 @@ void gravity_tree(void)
     DataIndexTable = (struct data_index *) mymalloc("DataIndexTable", All.BunchSize * sizeof(struct data_index));
     DataNodeList = (struct data_nodelist *) mymalloc("DataNodeList", All.BunchSize * sizeof(struct data_nodelist));
     if(All.HighestActiveTimeBin == All.HighestOccupiedTimeBin) {if(ThisTask == 0) printf(" ..All.BunchSize=%ld\n", All.BunchSize);}
-    int k, ewald_max, diff, save_NextParticle, ndone, ndone_flag, place, recvTask; double tstart, tend, ax, ay, az; MPI_Status status;
+    int k, ewald_max, diff, save_NextParticle, ndone, ndone_flag, place, recvTask; double tstart, tend, ax, ay, az;
     Ewaldcount = 0; Costtotal = 0; N_nodesinlist = 0; ewald_max=0;
 #if defined(BOX_PERIODIC) && !defined(GRAVITY_NOT_PERIODIC) && !defined(PMGRID)
     ewald_max = 1; /* the tree-code will need to iterate to perform the periodic boundary condition corrections */
@@ -269,6 +269,7 @@ void gravity_tree(void)
 
             /* ok now we have to figure out if there is enough memory to handle all the tasks sending us their data, and if not, break it into sub-chunks */
             int N_chunks_for_import, ngrp_initial, ngrp;
+            MPI_Request *mpi_requests = (MPI_Request *) malloc(2 * (1 << PTask) * sizeof(MPI_Request)); /* request handles for non-blocking comm */
             for(ngrp_initial = 1; ngrp_initial < (1 << PTask); ngrp_initial += N_chunks_for_import) /* sub-chunking loop opener */
             {
                 int flagall;
@@ -292,25 +293,31 @@ void gravity_tree(void)
                 GravDataGet = (struct gravdata_in *) mymalloc("GravDataGet", Nimport * sizeof(struct gravdata_in));
                 GravDataResult = (struct gravdata_out *) mymalloc("GravDataResult", Nimport * sizeof(struct gravdata_out));
 
-                tstart = my_second(); Nimport = 0; /* reset because this will be cycled below to calculate the recieve offsets (Recv_offset) */
-                for(ngrp = ngrp_initial; ngrp < ngrp_initial + N_chunks_for_import; ngrp++) /* exchange particle data */
+                /* Phase 1: post all non-blocking receives and sends for import data */
+                tstart = my_second(); Nimport = 0; int nrequests = 0;
+                for(ngrp = ngrp_initial; ngrp < ngrp_initial + N_chunks_for_import; ngrp++)
                 {
                     recvTask = ThisTask ^ ngrp;
                     if(recvTask < NTask)
                     {
-                        if(Send_count[recvTask] > 0 || Recv_count[recvTask] > 0) /* get the particles */
-                        {
-                            MPI_Sendrecv(&GravDataIn[Send_offset[recvTask]], Send_count[recvTask] * sizeof(struct gravdata_in), MPI_BYTE, recvTask, TAG_GRAV_A,
-                                         &GravDataGet[Nimport], Recv_count[recvTask] * sizeof(struct gravdata_in), MPI_BYTE, recvTask, TAG_GRAV_A,
-                                         MPI_COMM_WORLD, &status);
-                            Nimport += Recv_count[recvTask];
+                        if(Recv_count[recvTask] > 0) {
+                            MPI_Irecv(&GravDataGet[Nimport], Recv_count[recvTask] * sizeof(struct gravdata_in),
+                                      MPI_BYTE, recvTask, TAG_GRAV_A,
+                                      MPI_COMM_WORLD, &mpi_requests[nrequests++]);
                         }
+                        if(Send_count[recvTask] > 0) {
+                            MPI_Isend(&GravDataIn[Send_offset[recvTask]], Send_count[recvTask] * sizeof(struct gravdata_in),
+                                      MPI_BYTE, recvTask, TAG_GRAV_A,
+                                      MPI_COMM_WORLD, &mpi_requests[nrequests++]);
+                        }
+                        Nimport += Recv_count[recvTask];
                     }
                 }
+                MPI_Waitall(nrequests, mpi_requests, MPI_STATUSES_IGNORE);
                 tend = my_second(); timecommsumm1 += timediff(tstart, tend);
                 report_memory_usage(&HighMark_gravtree, "GRAVTREE");
 
-                /* now do the particles that were sent to us */
+                /* Phase 2: compute on the imported particles */
                 tstart = my_second(); NextJ = 0;
 #ifdef _OPENMP
 #pragma omp parallel
@@ -323,29 +330,34 @@ void gravity_tree(void)
 #endif
                     gravity_secondary_loop(&mainthreadid);
                 }
-                tend = my_second(); timetree2 += timediff(tstart, tend); tstart = my_second();
-                MPI_Barrier(MPI_COMM_WORLD); /* insert MPI Barrier here - will be forced by comms below anyways but this allows for clean timing measurements */
-                tend = my_second(); timewait2 += timediff(tstart, tend);
+                tend = my_second(); timetree2 += timediff(tstart, tend);
 
-                tstart = my_second(); Nimport = 0;
-                for(ngrp = ngrp_initial; ngrp < ngrp_initial + N_chunks_for_import; ngrp++) /* send the results for imported elements back to their host tasks */
+                /* Phase 3: post all non-blocking sends/receives for result data exchange */
+                tstart = my_second(); Nimport = 0; nrequests = 0;
+                for(ngrp = ngrp_initial; ngrp < ngrp_initial + N_chunks_for_import; ngrp++)
                 {
                     recvTask = ThisTask ^ ngrp;
                     if(recvTask < NTask)
                     {
-                        if(Send_count[recvTask] > 0 || Recv_count[recvTask] > 0)
-                        {
-                            MPI_Sendrecv(&GravDataResult[Nimport], Recv_count[recvTask] * sizeof(struct gravdata_out), MPI_BYTE, recvTask, TAG_GRAV_B,
-                                         &GravDataOut[Send_offset[recvTask]], Send_count[recvTask] * sizeof(struct gravdata_out), MPI_BYTE, recvTask, TAG_GRAV_B,
-                                         MPI_COMM_WORLD, &status);
-                            Nimport += Recv_count[recvTask];
+                        if(Recv_count[recvTask] > 0) {
+                            MPI_Isend(&GravDataResult[Nimport], Recv_count[recvTask] * sizeof(struct gravdata_out),
+                                      MPI_BYTE, recvTask, TAG_GRAV_B,
+                                      MPI_COMM_WORLD, &mpi_requests[nrequests++]);
                         }
+                        if(Send_count[recvTask] > 0) {
+                            MPI_Irecv(&GravDataOut[Send_offset[recvTask]], Send_count[recvTask] * sizeof(struct gravdata_out),
+                                      MPI_BYTE, recvTask, TAG_GRAV_B,
+                                      MPI_COMM_WORLD, &mpi_requests[nrequests++]);
+                        }
+                        Nimport += Recv_count[recvTask];
                     }
                 }
+                MPI_Waitall(nrequests, mpi_requests, MPI_STATUSES_IGNORE);
                 tend = my_second(); timecommsumm2 += timediff(tstart, tend);
                 myfree(GravDataResult); myfree(GravDataGet); /* free the structures used to send data back to tasks, its sent */
 
             } /* close the sub-chunking loop: for(ngrp_initial = 1; ngrp_initial < (1 << PTask); ngrp_initial += N_chunks_for_import) */
+            free(mpi_requests);
 
             /* we have all our results back from the elements we exported: add the result to the local elements */
             tstart = my_second();
