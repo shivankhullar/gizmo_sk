@@ -177,7 +177,7 @@ void out2particle_addFB(struct OUTPUT_STRUCT_NAME *out, int i, int mode, int loo
 #ifdef GALSF_USE_SNE_ONELOOP_SCHEME
             kmin=0; kmax=AREA_WEIGHTED_SUM_ELEMENTS;
 #endif
-            for(k=kmin;k<kmax;k++) {ASSIGN_ADD(P[i].Area_weighted_sum[k], out->Area_weighted_sum[k], mode);}
+            for(k=kmin;k<kmax;k++) {assign_add(&(P[i].Area_weighted_sum[k]),(out->Area_weighted_sum[k]),(mode));}
         } else {
             P[i].Mass -= out->M_coupled; if((P[i].Mass<0)||(isnan(P[i].Mass))) {P[i].Mass=0;}
 #ifdef SINGLE_STAR_FB_WINDS

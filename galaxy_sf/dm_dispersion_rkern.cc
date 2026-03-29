@@ -65,11 +65,11 @@ static struct OUTPUT_STRUCT_NAME
 /* this subroutine assigns the values to the variables that need to be sent -back to- the 'searching' element */
 void disp_out2particle_density(struct OUTPUT_STRUCT_NAME *out, int i, int mode, int loop_iteration)
 {
-    ASSIGN_ADD(CellP[i].DM_Vx, out->DM_Vx, mode);
-    ASSIGN_ADD(CellP[i].DM_Vy, out->DM_Vy, mode);
-    ASSIGN_ADD(CellP[i].DM_Vz, out->DM_Vz, mode);
-    ASSIGN_ADD(CellP[i].DM_VelDisp, out->DM_Vel_Disp, mode);
-    ASSIGN_ADD(CellP[i].NumNgbDM, out->Ngb, mode);
+    assign_add(&(CellP[i].DM_Vx),(out->DM_Vx),(mode));
+    assign_add(&(CellP[i].DM_Vy),(out->DM_Vy),(mode));
+    assign_add(&(CellP[i].DM_Vz),(out->DM_Vz),(mode));
+    assign_add(&(CellP[i].DM_VelDisp),(out->DM_Vel_Disp),(mode));
+    assign_add(&(CellP[i].NumNgbDM),(out->Ngb),(mode));
 }
 
 

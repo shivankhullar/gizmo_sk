@@ -98,13 +98,12 @@ struct OUTPUT_STRUCT_NAME
 }
 *DATARESULT_NAME, *DATAOUT_NAME; /* dont mess with these names, they get filled-in by your definitions automatically */
 
-#define ASSIGN_ADD_PRESET(x,y,mode) (mode == 0 ? (x=y) : (x+=y))
 /* this subroutine assigns the values to the variables that need to be sent -back to- the 'searching' element */
 static inline void OUTPUTFUNCTION_NAME(struct OUTPUT_STRUCT_NAME *out, int i, int mode, int loop_iteration)
 {
     int k, target; k=0; target = P[i].IndexMapToTempStruc;
 #if defined(SINK_CALC_LOCAL_ANGLEWEIGHTS)
-    ASSIGN_ADD_PRESET(SinkTempInfo[target].Sink_angle_weighted_kernel_sum, out->Sink_angle_weighted_kernel_sum, mode);
+    assign_add(&SinkTempInfo[target].Sink_angle_weighted_kernel_sum, out->Sink_angle_weighted_kernel_sum, mode);
 #endif
 #ifdef SINK_REPOSITION_ON_POTMIN
     if(mode==0) {P[i].Sink_PotentialMinimumOfNeighbors=out->Sink_PotentialMinimumOfNeighbors; for(k=0;k<3;k++) {P[i].Sink_PotentialMinimumOfNeighborsPos[k]=out->Sink_PotentialMinimumOfNeighborsPos[k];}

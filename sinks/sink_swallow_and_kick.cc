@@ -130,34 +130,33 @@ struct OUTPUT_STRUCT_NAME
 }
 *DATARESULT_NAME, *DATAOUT_NAME; /* dont mess with these names, they get filled-in by your definitions automatically */
 
-#define ASSIGN_ADD_PRESET(x,y,mode) (mode == 0 ? (x=y) : (x+=y))
 /* this subroutine assigns the values to the variables that need to be sent -back to- the 'searching' element */
 static inline void OUTPUTFUNCTION_NAME(struct OUTPUT_STRUCT_NAME *out, int i, int mode, int loop_iteration)
 {
     int k, target = P[i].IndexMapToTempStruc; k=0;
-    ASSIGN_ADD_PRESET(SinkTempInfo[target].accreted_Mass, out->accreted_Mass, mode);
-    ASSIGN_ADD_PRESET(SinkTempInfo[target].accreted_Sink_Mass, out->accreted_Sink_Mass, mode);
-    ASSIGN_ADD_PRESET(SinkTempInfo[target].accreted_Sink_Mass_reservoir, out->accreted_Sink_Mass_reservoir, mode);
+    assign_add(&SinkTempInfo[target].accreted_Mass, out->accreted_Mass, mode);
+    assign_add(&SinkTempInfo[target].accreted_Sink_Mass, out->accreted_Sink_Mass, mode);
+    assign_add(&SinkTempInfo[target].accreted_Sink_Mass_reservoir, out->accreted_Sink_Mass_reservoir, mode);
 #if defined(SINK_SWALLOWGAS) && !defined(SINK_GRAVCAPTURE_GAS)
-    ASSIGN_ADD_PRESET(SinkTempInfo[target].Sink_AccretionDeficit, out->Sink_AccretionDeficit, mode);
+    assign_add(&SinkTempInfo[target].Sink_AccretionDeficit, out->Sink_AccretionDeficit, mode);
 #endif
 #ifdef GRAIN_FLUID
-    ASSIGN_ADD_PRESET(SinkTempInfo[target].accreted_dust_Mass, out->accreted_dust_Mass, mode);
+    assign_add(&SinkTempInfo[target].accreted_dust_Mass, out->accreted_dust_Mass, mode);
 #endif
 #ifdef RT_REINJECT_ACCRETED_PHOTONS
-    ASSIGN_ADD_PRESET(SinkTempInfo[target].accreted_photon_energy, out->accreted_photon_energy, mode);
+    assign_add(&SinkTempInfo[target].accreted_photon_energy, out->accreted_photon_energy, mode);
 #endif
 #if defined(SINK_FOLLOW_ACCRETED_MOMENTUM)
-    for(k=0;k<3;k++) {ASSIGN_ADD_PRESET(SinkTempInfo[target].accreted_momentum[k], out->accreted_momentum[k], mode);}
+    for(k=0;k<3;k++) {assign_add(&SinkTempInfo[target].accreted_momentum[k], out->accreted_momentum[k], mode);}
 #endif
 #if defined(SINK_FOLLOW_ACCRETED_COM)
-    for(k=0;k<3;k++) {ASSIGN_ADD_PRESET(SinkTempInfo[target].accreted_centerofmass[k], out->accreted_centerofmass[k], mode);}
+    for(k=0;k<3;k++) {assign_add(&SinkTempInfo[target].accreted_centerofmass[k], out->accreted_centerofmass[k], mode);}
 #endif
 #if defined(SINK_RETURN_BFLUX)
-    for(k=0;k<3;k++) {ASSIGN_ADD_PRESET(SinkTempInfo[target].accreted_B[k], out->accreted_B[k], mode);}
+    for(k=0;k<3;k++) {assign_add(&SinkTempInfo[target].accreted_B[k], out->accreted_B[k], mode);}
 #endif
 #if defined(SINK_FOLLOW_ACCRETED_ANGMOM)
-    for(k=0;k<3;k++) {ASSIGN_ADD_PRESET(SinkTempInfo[target].accreted_J[k], out->accreted_J[k], mode);}
+    for(k=0;k<3;k++) {assign_add(&SinkTempInfo[target].accreted_J[k], out->accreted_J[k], mode);}
 #endif
 #ifdef SINK_COUNTPROGS
     P[i].Sink_CountProgs += out->Sink_CountProgs;
@@ -1020,7 +1019,7 @@ int sink_spawn_particle_wind_shell( int i, int dummy_cell_i_to_clone, int num_al
         NextInTimeBin[j] = NextInTimeBin[i0]; if(NextInTimeBin[i0] >= 0) {PrevInTimeBin[NextInTimeBin[i0]] = j;} NextInTimeBin[i0] = j; if(LastInTimeBin[bin] == i0) {LastInTimeBin[bin] = j;}
         P[j].Ti_begstep = All.Ti_Current; P[j].Ti_current = All.Ti_Current;
 #ifdef WAKEUP /* note - you basically MUST have this flag on for this routine to work at all -- */
-        P[j].dt_step = GET_INTEGERTIME_FROM_TIMEBIN(bin);
+        P[j].dt_step = get_integertime_from_timebin(bin);
         P[j].wakeup = -1;
         NeedToWakeupParticles_local = 1;
 #endif

@@ -369,7 +369,7 @@ void find_next_sync_point_and_drift(void)
 	  if(n > 0)
 	    {
 	      highest_occupied_bin = n;
-	      dt_bin = GET_INTEGERTIME_FROM_TIMEBIN(n);
+	      dt_bin = get_integertime_from_timebin(n);
 	      ti_next_for_bin = (All.Ti_Current / dt_bin) * dt_bin + dt_bin;	/* next kick time for this timebin */
 	    }
 	  else
@@ -429,7 +429,7 @@ void find_next_sync_point_and_drift(void)
   /* mark the bins that will be active */
   for(n = 1, TimeBinActive[0] = 1, NumForceUpdate = TimeBinCount[0], highest_active_bin = 0; n < TIMEBINS; n++)
     {
-      dt_bin = GET_INTEGERTIME_FROM_TIMEBIN(n);
+      dt_bin = get_integertime_from_timebin(n);
       if((ti_next_kick_global % dt_bin) == 0)
 	{
 	  TimeBinActive[n] = 1;
@@ -697,11 +697,11 @@ void output_log_messages(void)
             if(tot_count_gas[i] > 0 || tot_count[i] > 0)
             {
                 printf(" %c  bin=%2d      %10llu  %10llu   %16.12f       %10llu %c %c  %10.2f    %5.1f%%\n", TimeBinActive[i] ? 'X' : ' ', i, tot_count[i] - tot_count_gas[i], tot_count_gas[i],
-                       GET_INTEGERTIME_FROM_TIMEBIN(i) * All.Timebase_interval, tot_cumulative[i], (i == All.HighestActiveTimeBin) ? '<' : ' ',
+                       get_integertime_from_timebin(i) * All.Timebase_interval, tot_cumulative[i], (i == All.HighestActiveTimeBin) ? '<' : ' ',
                        (tot_cumulative[i] > All.TreeDomainUpdateFrequency * All.TotNumPart) ? '*' : ' ', avg_CPU_TimeBin[i], 100.0 * frac_CPU_TimeBin[i]);
 #ifdef OUTPUT_ADDITIONAL_RUNINFO
                 fprintf(FdTimebin," %c  bin=%2d      %10llu  %10llu   %16.12f       %10llu %c %c  %10.2f    %5.1f%%\n", TimeBinActive[i] ? 'X' : ' ', i, tot_count[i] - tot_count_gas[i], tot_count_gas[i],
-                        GET_INTEGERTIME_FROM_TIMEBIN(i) * All.Timebase_interval, tot_cumulative[i], (i == All.HighestActiveTimeBin) ? '<' : ' ',
+                        get_integertime_from_timebin(i) * All.Timebase_interval, tot_cumulative[i], (i == All.HighestActiveTimeBin) ? '<' : ' ',
                         (tot_cumulative[i] > All.TreeDomainUpdateFrequency * All.TotNumPart) ? '*' : ' ', avg_CPU_TimeBin[i], 100.0 * frac_CPU_TimeBin[i]);
 #endif
                 if(TimeBinActive[i])

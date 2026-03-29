@@ -191,7 +191,7 @@
 #define COSMIC_RAY_FLUID            /*! use 'explicit' CR integration in one of the code formulations */
 #endif // closes whether to do cr fluid or subgrid
 #if !defined(CRFLUID_EVOLVE_SPECTRUM) /*! check to enable flags for which CR spectrum or single-bin to evolve */
-#if (FIRE_CRS >= 0) || (FIRE_CRS <= 1)
+#if (FIRE_CRS >= 0) && (FIRE_CRS <= 1)
 #define CRFLUID_EVOLVE_SPECTRUM 1   /*! evolve proton + electron spectrum */
 #endif
 #if (FIRE_CRS >= 2)
@@ -450,7 +450,9 @@
 #endif
 #endif // COOLING
 #if defined(SINGLE_STAR_FB_WINDS) && defined(SINGLE_STAR_STARFORGE_PROTOSTELLAR_EVOLUTION) || defined(COOLING)
+#ifndef GALSF_FB_FIRE_STELLAREVOLUTION
 #define GALSF_FB_FIRE_STELLAREVOLUTION 3 // enable multi-loop feedback from such sources [this is specific to the DG-MG implementations here, not for public use right now!]. for now set to =2, which should force the code version to match previous iterations, as compared to the newer implementations.
+#endif
 #endif
 #if defined(RT_ISRF_BACKGROUND)
 #if CHECK_IF_PREPROCESSOR_HAS_NUMERICAL_VALUE_(RT_ISRF_BACKGROUND)
@@ -651,12 +653,9 @@
 
 
 #if defined(EOS_GAMMA_VARIABLE)
-#define GAMMA(i) (gamma_eos(i)) /*! use an actual function! */
 #ifndef EOS_GENERAL
-#define EOS_GENERAL /*! needs to be on for this to work */
+#define EOS_GENERAL
 #endif
-#else
-#define GAMMA(i) (EOS_GAMMA) /*! default to this being a universal constant */
 #endif
 #define GAMMA_DEFAULT (EOS_GAMMA)
 
@@ -687,11 +686,13 @@
 
 
 #define CRFLUID_REDUCED_C_CODE(k) (return_CRbin_M1speed(k)) // allow for bin-to-bin variations in RSOL
-#if defined(CRFLUID_ALT_RSOL_FORM)
-#define CosmicRayFluid_RSOL_Corrfac(k) (((CRFLUID_REDUCED_C_CODE(k))/(C_LIGHT_CODE))) // this needs to be defined after the code SOL for obvious reasons
+static inline double cosmicrayfluid_rsol_corrfac(int k) {
+#ifdef CRFLUID_ALT_RSOL_FORM
+    return CRFLUID_REDUCED_C_CODE(k) / C_LIGHT_CODE;
 #else
-#define CosmicRayFluid_RSOL_Corrfac(k) (1.0) // this is always unity, macro is trivial
+    return 1.0;
 #endif
+}
 
 
 #ifndef FOF_PRIMARY_LINK_TYPES
@@ -859,7 +860,7 @@
 #endif
 
 #ifdef RT_CHEM_PHOTOION
-#define RT_BAND_IS_IONIZING(k) ((k==RT_FREQ_BIN_H0) || (k==RT_FREQ_BIN_He0) || (k==RT_FREQ_BIN_He1) || (k==RT_FREQ_BIN_He2))
+static inline int rt_band_is_ionizing(int k) { return (k==RT_FREQ_BIN_H0) || (k==RT_FREQ_BIN_He0) || (k==RT_FREQ_BIN_He1) || (k==RT_FREQ_BIN_He2); }
 #endif
 
 #ifndef GALSF_FB_FIRE_RT_LONGRANGE
@@ -1025,7 +1026,9 @@
 #define BOX_SHEARING_Q (3.0/2.0)
 #endif
 /* set omega - usually we will default to always using time coordinates such that Omega = 1 at the box center */
+#ifndef BOX_SHEARING_OMEGA_BOX_CENTER
 #define BOX_SHEARING_OMEGA_BOX_CENTER 1.0
+#endif
 /* need analytic gravity on so we can add the appropriate source terms to the EOM */
 #ifndef GRAVITY_ANALYTIC
 #define GRAVITY_ANALYTIC

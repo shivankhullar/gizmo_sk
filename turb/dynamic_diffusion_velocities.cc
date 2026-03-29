@@ -21,9 +21,6 @@
 
 #ifdef TURB_DIFF_DYNAMIC
 
-#define ASSIGN_ADD_PRESET(x,y,mode) (x+=y)
-#define MINMAX_CHECK(x,xmin,xmax) ((x<xmin)?(xmin=x):((x>xmax)?(xmax=x):(1)))
-#define SHOULD_I_USE_SPH_GRADIENTS(condition_number) ((condition_number > CONDITION_NUMBER_DANGER) ? (1):(0))
 #define NV_MYSIGN(x) (( x > 0 ) - ( x < 0 ))
 
 struct kernel_DiffFilter {
@@ -69,13 +66,11 @@ struct OUTPUT_STRUCT_NAME {
 }
 *DATARESULT_NAME, *DATAOUT_NAME;
 
-#define MAX_ADD(x,y,mode) ((y > x) ? (x = y) : (1)) // simpler definition now used
-#define MIN_ADD(x,y,mode) ((y < x) ? (x = y) : (1))
 static inline void out2particle_DiffFilter(struct OUTPUT_STRUCT_NAME *out, int i, int mode, int loop_iteration) {
-    int k; for (k = 0; k < 3; k++) {ASSIGN_ADD_PRESET(CellP[i].Velocity_bar[k], out->Velocity_bar[k], mode);}
-    MAX_ADD(CellP[i].FilterWidth_bar, out->FilterWidth_bar, mode);
-    MAX_ADD(CellP[i].MaxDistance_for_grad, out->MaxDistance_for_grad, mode);
-    ASSIGN_ADD_PRESET(CellP[i].Norm_hat, out->Norm_hat, mode);
+    int k; for (k = 0; k < 3; k++) {assign_add(&CellP[i].Velocity_bar[k], out->Velocity_bar[k], 1);}
+    max_add(&CellP[i].FilterWidth_bar, out->FilterWidth_bar);
+    max_add(&CellP[i].MaxDistance_for_grad, out->MaxDistance_for_grad);
+    assign_add(&CellP[i].Norm_hat, out->Norm_hat, 1);
 }
 
 /* operations that need to be performed before entering the main loop */

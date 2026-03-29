@@ -22,13 +22,6 @@
  */
 
 
-#define ASSIGN_ADD_PRESET(x,y,mode) (x+=y)
-#define MINMAX_CHECK(x,xmin,xmax) ((x<xmin)?(xmin=x):((x>xmax)?(xmax=x):(1)))
-#if defined(COOLING)
-#define SHOULD_I_USE_SPH_GRADIENTS(condition_number) ((condition_number > CONDITION_NUMBER_DANGER) ? (1):(0))
-#else
-#define SHOULD_I_USE_SPH_GRADIENTS(condition_number) ((condition_number > CONDITION_NUMBER_DANGER) ? (0):(0))
-#endif
 
 
 #if defined(MHD_CONSTRAINED_GRADIENT)
@@ -246,7 +239,7 @@ static inline void particle2in_GasGrad(struct GasGraddata_in *in, int i, int gra
 #endif
 #endif
 
-    if(SHOULD_I_USE_SPH_GRADIENTS(CellP[i].ConditionNumber)) {in->Mass *= -1;}
+    if(should_i_use_sph_gradients(CellP[i].ConditionNumber)) {in->Mass *= -1;}
 #ifdef MHD_CONSTRAINED_GRADIENT
     in->ConditionNumber = CellP[i].ConditionNumber;
     if(gradient_iteration > 0) {if(CellP[i].FlagForConstrainedGradients <= 0) {in->Mass = 0;}}
@@ -316,20 +309,16 @@ static inline void particle2in_GasGrad(struct GasGraddata_in *in, int i, int gra
 
 
 
-//#define MAX_ADD(x,y,mode) (mode == 0 ? (x=y) : (((x)<(y)) ? (x=y) : (x))) // these definitions applied before the symmetric re-formulation of this routine
-//#define MIN_ADD(x,y,mode) (mode == 0 ? (x=y) : (((x)>(y)) ? (x=y) : (x)))
-#define MAX_ADD(x,y,mode) ((y > x) ? (x = y) : (1)) // simpler definition now used
-#define MIN_ADD(x,y,mode) ((y < x) ? (x = y) : (1))
 
 
 static inline void out2particle_GasGrad_iter(struct GasGraddata_out_iter *out, int i, int mode, int gradient_iteration)
 {
 #ifdef MHD_CONSTRAINED_GRADIENT
     {
-        ASSIGN_ADD_PRESET(GasGradDataPasser[i].FaceDotB,out->FaceDotB,mode);
+        assign_add(&GasGradDataPasser[i].FaceDotB,out->FaceDotB,1);
 #ifdef MHD_CONSTRAINED_GRADIENT_MIDPOINT
         int k;
-        for(k=0;k<3;k++) {ASSIGN_ADD_PRESET(GasGradDataPasser[i].PhiGrad[k],out->PhiGrad[k],mode);}
+        for(k=0;k<3;k++) {assign_add(&GasGradDataPasser[i].PhiGrad[k],out->PhiGrad[k],1);}
 #endif
     }
 #endif
@@ -341,10 +330,10 @@ static inline void out2particle_GasGrad(struct GasGraddata_out *out, int i, int 
 {
 #ifdef MHD_CONSTRAINED_GRADIENT
     {
-        ASSIGN_ADD_PRESET(GasGradDataPasser[i].FaceDotB,out->FaceDotB,mode);
+        assign_add(&GasGradDataPasser[i].FaceDotB,out->FaceDotB,1);
 #ifdef MHD_CONSTRAINED_GRADIENT_MIDPOINT
         int k;
-        for(k=0;k<3;k++) {ASSIGN_ADD_PRESET(GasGradDataPasser[i].PhiGrad[k],out->Gradients[k].Phi,mode);}
+        for(k=0;k<3;k++) {assign_add(&GasGradDataPasser[i].PhiGrad[k],out->Gradients[k].Phi,1);}
 #endif
     }
 #endif
@@ -352,114 +341,114 @@ static inline void out2particle_GasGrad(struct GasGraddata_out *out, int i, int 
     if(gradient_iteration == 0)
     {
         int j,k;
-        MAX_ADD(GasGradDataPasser[i].MaxDistance,out->MaxDistance,mode);
+        max_add(&GasGradDataPasser[i].MaxDistance,out->MaxDistance);
 #ifdef TURB_DIFF_DYNAMIC
         for (j = 0; j < 3; j++) {
-            MAX_ADD(GasGradDataPasser[i].Maxima.Velocity_bar[j], out->Maxima.Velocity_bar[j], mode);
-            MIN_ADD(GasGradDataPasser[i].Minima.Velocity_bar[j], out->Minima.Velocity_bar[j], mode);
-            ASSIGN_ADD_PRESET(CellP[i].Velocity_hat[j], out->Velocity_hat[j], mode);
+            max_add(&GasGradDataPasser[i].Maxima.Velocity_bar[j], out->Maxima.Velocity_bar[j]);
+            min_add(&GasGradDataPasser[i].Minima.Velocity_bar[j], out->Minima.Velocity_bar[j]);
+            assign_add(&CellP[i].Velocity_hat[j], out->Velocity_hat[j], 1);
             for (k = 0; k < 3; k++) {
-                ASSIGN_ADD_PRESET(GasGradDataPasser[i].GradVelocity_bar[j][k], out->Gradients[k].Velocity_bar[j], mode);
+                assign_add(&GasGradDataPasser[i].GradVelocity_bar[j][k], out->Gradients[k].Velocity_bar[j], 1);
             }
         }
 #endif
 
 #if defined(KERNEL_CRK_FACES)
-        ASSIGN_ADD_PRESET(GasGradDataPasser[i].m0,out->m0,mode);
-        for(k=0;k<3;k++) {ASSIGN_ADD_PRESET(GasGradDataPasser[i].dm0[k],out->dm0[k],mode);}
+        assign_add(&GasGradDataPasser[i].m0,out->m0,1);
+        for(k=0;k<3;k++) {assign_add(&GasGradDataPasser[i].dm0[k],out->dm0[k],1);}
         for(j=0;j<3;j++)
         {
-            ASSIGN_ADD_PRESET(GasGradDataPasser[i].m1[j],out->m1[j],mode);
-            for(k=0;k<3;k++) {ASSIGN_ADD_PRESET(GasGradDataPasser[i].dm1[j][k],out->dm1[j][k],mode);}
+            assign_add(&GasGradDataPasser[i].m1[j],out->m1[j],1);
+            for(k=0;k<3;k++) {assign_add(&GasGradDataPasser[i].dm1[j][k],out->dm1[j][k],1);}
         }
         for(j=0;j<6;j++)
         {
-            ASSIGN_ADD_PRESET(GasGradDataPasser[i].m2[j],out->m2[j],mode);
-            for(k=0;k<3;k++) {ASSIGN_ADD_PRESET(GasGradDataPasser[i].dm2[j][k],out->dm2[j][k],mode);}
+            assign_add(&GasGradDataPasser[i].m2[j],out->m2[j],1);
+            for(k=0;k<3;k++) {assign_add(&GasGradDataPasser[i].dm2[j][k],out->dm2[j][k],1);}
         }
 #endif
 
 #if defined(HYDRO_MESHLESS_FINITE_VOLUME) && (HYDRO_FIX_MESH_MOTION==6)
-        for(k=0;k<3;k++) {ASSIGN_ADD_PRESET(GasGradDataPasser[i].GlassAcc[k],out->GlassAcc[k],mode);}
+        for(k=0;k<3;k++) {assign_add(&GasGradDataPasser[i].GlassAcc[k],out->GlassAcc[k],1);}
 #endif
 #ifdef SPHAV_CD10_VISCOSITY_SWITCH
-        ASSIGN_ADD_PRESET(CellP[i].alpha_limiter, out->alpha_limiter, mode);
+        assign_add(&CellP[i].alpha_limiter, out->alpha_limiter, 1);
 #endif
 
-        MAX_ADD(GasGradDataPasser[i].Maxima.Density,out->Maxima.Density,mode);
-        MIN_ADD(GasGradDataPasser[i].Minima.Density,out->Minima.Density,mode);
-        MAX_ADD(GasGradDataPasser[i].Maxima.Pressure,out->Maxima.Pressure,mode);
-        MIN_ADD(GasGradDataPasser[i].Minima.Pressure,out->Minima.Pressure,mode);
+        max_add(&GasGradDataPasser[i].Maxima.Density,out->Maxima.Density);
+        min_add(&GasGradDataPasser[i].Minima.Density,out->Minima.Density);
+        max_add(&GasGradDataPasser[i].Maxima.Pressure,out->Maxima.Pressure);
+        min_add(&GasGradDataPasser[i].Minima.Pressure,out->Minima.Pressure);
         for(k=0;k<3;k++)
         {
-            ASSIGN_ADD_PRESET(CellP[i].Gradients.Density[k],out->Gradients[k].Density,mode);
-            ASSIGN_ADD_PRESET(CellP[i].Gradients.Pressure[k],out->Gradients[k].Pressure,mode);
+            assign_add(&CellP[i].Gradients.Density[k],out->Gradients[k].Density,1);
+            assign_add(&CellP[i].Gradients.Pressure[k],out->Gradients[k].Pressure,1);
         }
 #ifdef DOGRAD_INTERNAL_ENERGY
-        MAX_ADD(GasGradDataPasser[i].Maxima.InternalEnergy,out->Maxima.InternalEnergy,mode);
-        MIN_ADD(GasGradDataPasser[i].Minima.InternalEnergy,out->Minima.InternalEnergy,mode);
-        for(k=0;k<3;k++) {ASSIGN_ADD_PRESET(CellP[i].Gradients.InternalEnergy[k],out->Gradients[k].InternalEnergy,mode);}
+        max_add(&GasGradDataPasser[i].Maxima.InternalEnergy,out->Maxima.InternalEnergy);
+        min_add(&GasGradDataPasser[i].Minima.InternalEnergy,out->Minima.InternalEnergy);
+        for(k=0;k<3;k++) {assign_add(&CellP[i].Gradients.InternalEnergy[k],out->Gradients[k].InternalEnergy,1);}
 #endif
 #ifdef COSMIC_RAY_FLUID
         for(j=0;j<N_CR_PARTICLE_BINS;j++)
         {
-            MAX_ADD(GasGradDataPasser[i].Maxima.CosmicRayPressure[j],out->Maxima.CosmicRayPressure[j],mode);
-            MIN_ADD(GasGradDataPasser[i].Minima.CosmicRayPressure[j],out->Minima.CosmicRayPressure[j],mode);
-            for(k=0;k<3;k++) {ASSIGN_ADD_PRESET(CellP[i].Gradients.CosmicRayPressure[j][k],out->Gradients[k].CosmicRayPressure[j],mode);}
+            max_add(&GasGradDataPasser[i].Maxima.CosmicRayPressure[j],out->Maxima.CosmicRayPressure[j]);
+            min_add(&GasGradDataPasser[i].Minima.CosmicRayPressure[j],out->Minima.CosmicRayPressure[j]);
+            for(k=0;k<3;k++) {assign_add(&CellP[i].Gradients.CosmicRayPressure[j][k],out->Gradients[k].CosmicRayPressure[j],1);}
         }
 #endif
 #ifdef DOGRAD_SOUNDSPEED
-        MAX_ADD(GasGradDataPasser[i].Maxima.SoundSpeed,out->Maxima.SoundSpeed,mode);
-        MIN_ADD(GasGradDataPasser[i].Minima.SoundSpeed,out->Minima.SoundSpeed,mode);
-        for(k=0;k<3;k++) {ASSIGN_ADD_PRESET(CellP[i].Gradients.SoundSpeed[k],out->Gradients[k].SoundSpeed,mode);}
+        max_add(&GasGradDataPasser[i].Maxima.SoundSpeed,out->Maxima.SoundSpeed);
+        min_add(&GasGradDataPasser[i].Minima.SoundSpeed,out->Minima.SoundSpeed);
+        for(k=0;k<3;k++) {assign_add(&CellP[i].Gradients.SoundSpeed[k],out->Gradients[k].SoundSpeed,1);}
 #endif
 
         for(j=0;j<3;j++)
         {
-            MAX_ADD(GasGradDataPasser[i].Maxima.Velocity[j],out->Maxima.Velocity[j],mode);
-            MIN_ADD(GasGradDataPasser[i].Minima.Velocity[j],out->Minima.Velocity[j],mode);
-            for(k=0;k<3;k++) {ASSIGN_ADD_PRESET(CellP[i].Gradients.Velocity[j][k],out->Gradients[k].Velocity[j],mode);}
+            max_add(&GasGradDataPasser[i].Maxima.Velocity[j],out->Maxima.Velocity[j]);
+            min_add(&GasGradDataPasser[i].Minima.Velocity[j],out->Minima.Velocity[j]);
+            for(k=0;k<3;k++) {assign_add(&CellP[i].Gradients.Velocity[j][k],out->Gradients[k].Velocity[j],1);}
         }
 
 #ifdef MAGNETIC
 
 #ifdef HYDRO_SPH
 #ifdef DIVBCLEANING_DEDNER
-        ASSIGN_ADD_PRESET(CellP[i].divB,out->divB, mode);
+        assign_add(&CellP[i].divB,out->divB, 1);
 #endif
-        for(k = 0; k < 3; k++) {ASSIGN_ADD_PRESET(CellP[i].DtB[k],out->DtB[k], mode);}
+        for(k = 0; k < 3; k++) {assign_add(&CellP[i].DtB[k],out->DtB[k], 1);}
 #endif
 
 
 #ifdef MHD_CONSTRAINED_GRADIENT
         for(j=0;j<3;j++)
         {
-            ASSIGN_ADD_PRESET(CellP[i].Face_Area[j],out->Face_Area[j],mode);
+            assign_add(&CellP[i].Face_Area[j],out->Face_Area[j],1);
             for(k=0;k<3;k++)
             {
-                ASSIGN_ADD_PRESET(GasGradDataPasser[i].BGrad[j][k],out->Gradients[k].B[j],mode);
-                ASSIGN_ADD_PRESET(GasGradDataPasser[i].FaceCrossX[j][k],out->FaceCrossX[j][k],mode);
+                assign_add(&GasGradDataPasser[i].BGrad[j][k],out->Gradients[k].B[j],1);
+                assign_add(&GasGradDataPasser[i].FaceCrossX[j][k],out->FaceCrossX[j][k],1);
             }
         }
 #endif
 
         for(j=0;j<3;j++)
         {
-            MAX_ADD(GasGradDataPasser[i].Maxima.B[j],out->Maxima.B[j],mode);
-            MIN_ADD(GasGradDataPasser[i].Minima.B[j],out->Minima.B[j],mode);
+            max_add(&GasGradDataPasser[i].Maxima.B[j],out->Maxima.B[j]);
+            min_add(&GasGradDataPasser[i].Minima.B[j],out->Minima.B[j]);
             for(k=0;k<3;k++)
             {
 #ifndef MHD_CONSTRAINED_GRADIENT
-                ASSIGN_ADD_PRESET(CellP[i].Gradients.B[j][k],out->Gradients[k].B[j],mode);
+                assign_add(&CellP[i].Gradients.B[j][k],out->Gradients[k].B[j],1);
 #endif
             }
         }
 
 #ifdef DIVBCLEANING_DEDNER
-        MAX_ADD(GasGradDataPasser[i].Maxima.Phi,out->Maxima.Phi,mode);
-        MIN_ADD(GasGradDataPasser[i].Minima.Phi,out->Minima.Phi,mode);
+        max_add(&GasGradDataPasser[i].Maxima.Phi,out->Maxima.Phi);
+        min_add(&GasGradDataPasser[i].Minima.Phi,out->Minima.Phi);
 #ifndef MHD_CONSTRAINED_GRADIENT_MIDPOINT
-        for(k=0;k<3;k++) {ASSIGN_ADD_PRESET(CellP[i].Gradients.Phi[k],out->Gradients[k].Phi,mode);}
+        for(k=0;k<3;k++) {assign_add(&CellP[i].Gradients.Phi[k],out->Gradients[k].Phi,1);}
 #endif
 #endif
 #endif // closes MAGNETIC
@@ -467,23 +456,23 @@ static inline void out2particle_GasGrad(struct GasGraddata_out *out, int i, int 
 #if defined(TURB_DIFF_METALS) && !defined(TURB_DIFF_METALS_LOWORDER)
         for(j=0;j<NUM_METAL_SPECIES;j++)
         {
-            MAX_ADD(GasGradDataPasser[i].Maxima.Metallicity[j],out->Maxima.Metallicity[j],mode);
-            MIN_ADD(GasGradDataPasser[i].Minima.Metallicity[j],out->Minima.Metallicity[j],mode);
-            for(k=0;k<3;k++) {ASSIGN_ADD_PRESET(CellP[i].Gradients.Metallicity[j][k],out->Gradients[k].Metallicity[j],mode);}
+            max_add(&GasGradDataPasser[i].Maxima.Metallicity[j],out->Maxima.Metallicity[j]);
+            min_add(&GasGradDataPasser[i].Minima.Metallicity[j],out->Minima.Metallicity[j]);
+            for(k=0;k<3;k++) {assign_add(&CellP[i].Gradients.Metallicity[j][k],out->Gradients[k].Metallicity[j],1);}
         }
 #endif
 
 #ifdef RT_COMPGRAD_EDDINGTON_TENSOR
         for(j=0;j<N_RT_FREQ_BINS;j++)
         {
-            MAX_ADD(GasGradDataPasser[i].Maxima.Rad_E_gamma[j],out->Maxima.Rad_E_gamma[j],mode);
-            MIN_ADD(GasGradDataPasser[i].Minima.Rad_E_gamma[j],out->Minima.Rad_E_gamma[j],mode);
-            for(k=0;k<3;k++) {ASSIGN_ADD_PRESET(GasGradDataPasser[i].Gradients_Rad_E_gamma[j][k],out->Gradients[k].Rad_E_gamma[j],mode);}
+            max_add(&GasGradDataPasser[i].Maxima.Rad_E_gamma[j],out->Maxima.Rad_E_gamma[j]);
+            min_add(&GasGradDataPasser[i].Minima.Rad_E_gamma[j],out->Minima.Rad_E_gamma[j]);
+            for(k=0;k<3;k++) {assign_add(&GasGradDataPasser[i].Gradients_Rad_E_gamma[j][k],out->Gradients[k].Rad_E_gamma[j],1);}
 #if defined(RT_M1_SECONDORDER) && defined(RT_EVOLVE_FLUX)
             {int k_d; for(k_d=0;k_d<3;k_d++) {
-                MAX_ADD(GasGradDataPasser[i].Maxima.Rad_Flux[j][k_d], out->Maxima.Rad_Flux[j][k_d], mode);
-                MIN_ADD(GasGradDataPasser[i].Minima.Rad_Flux[j][k_d], out->Minima.Rad_Flux[j][k_d], mode);
-                for(k=0;k<3;k++) {ASSIGN_ADD_PRESET(CellP[i].Gradients.Rad_Flux_Grad[j][k_d][k], out->Gradients[k].Rad_Flux[j][k_d], mode);}
+                max_add(&GasGradDataPasser[i].Maxima.Rad_Flux[j][k_d], out->Maxima.Rad_Flux[j][k_d]);
+                min_add(&GasGradDataPasser[i].Minima.Rad_Flux[j][k_d], out->Minima.Rad_Flux[j][k_d]);
+                for(k=0;k<3;k++) {assign_add(&CellP[i].Gradients.Rad_Flux_Grad[j][k_d][k], out->Gradients[k].Rad_Flux[j][k_d], 1);}
             }}
 #endif
         }
@@ -508,9 +497,9 @@ static inline void out2particle_GasGrad(struct GasGraddata_out *out, int i, int 
         	}
         }
 #endif
-        
+
 #if defined(ADAPTIVE_GRAVSOFT_FORGAS) || (ADAPTIVE_GRAVSOFT_FORALL & 1)
-        ASSIGN_ADD_PRESET(P[i].AGS_zeta, out->AGS_zeta,   mode);
+        assign_add(&P[i].AGS_zeta, out->AGS_zeta, 1);
 #endif
 
     } // gradient_iteration == 0
@@ -544,7 +533,7 @@ void local_slopelimiter(double *grad, double valmax, double valmin, double alim,
 void construct_gradient(double *grad, int i)
 {
     /* check if the matrix is well-conditioned: otherwise we will use the 'standard SPH-like' derivative estimation */
-    if(SHOULD_I_USE_SPH_GRADIENTS(CellP[i].ConditionNumber))
+    if(should_i_use_sph_gradients(CellP[i].ConditionNumber))
     {
         /* the condition number was bad, so we used SPH-like gradients */
         if(CellP[i].Density > 0) {int k; for(k=0;k<3;k++) {grad[k] *= P[i].DrkernNgbFactor / CellP[i].Density;}}
@@ -936,7 +925,7 @@ void hydro_gradient_calc(void)
                 /* set the relevant flags to decide whether or not we use the constrained gradients */
                 if(area > 0.5) {CellP[i].FlagForConstrainedGradients = 0;}
                 if(CellP[i].ConditionNumber > 1000.) {CellP[i].FlagForConstrainedGradients = 0;}
-                if(SHOULD_I_USE_SPH_GRADIENTS(CellP[i].ConditionNumber)) {CellP[i].FlagForConstrainedGradients = 0;} /* this must be here, since in this case the SPH gradients are used, which will not work with this method */
+                if(should_i_use_sph_gradients(CellP[i].ConditionNumber)) {CellP[i].FlagForConstrainedGradients = 0;} /* this must be here, since in this case the SPH gradients are used, which will not work with this method */
 
                 /* now check, and if ok, enter the gradient re-calculation */
                 if(CellP[i].FlagForConstrainedGradients == 1)
@@ -1538,7 +1527,7 @@ int GasGrad_evaluate(int target, int mode, int *exportflag, int *exportnodecount
 #endif
                 {
                     /* ok, we need the j-particle weights, but first check what kind of gradient we are calculating */
-                    sph_gradients_flag_j = SHOULD_I_USE_SPH_GRADIENTS(CellP[j].ConditionNumber);
+                    sph_gradients_flag_j = should_i_use_sph_gradients(CellP[j].ConditionNumber);
                     int kernel_mode_j;
 #if defined(HYDRO_SPH) || defined(KERNEL_CRK_FACES)
                     kernel_mode_j = 0; // for some circumstances, we require both wk and dwk //
@@ -1633,8 +1622,8 @@ int GasGrad_evaluate(int target, int mode, int *exportflag, int *exportnodecount
                 double dphi = Get_Gas_PhiField(j) - local.GQuant.Phi;
                 if(gradient_iteration == 0)
                 {
-                    MINMAX_CHECK(dphi,out.Minima.Phi,out.Maxima.Phi);
-                    if(swap_to_j) {MINMAX_CHECK(-dphi,GasGradDataPasser[j].Minima.Phi,GasGradDataPasser[j].Maxima.Phi);}
+                    minmax_check(dphi,&out.Minima.Phi,&out.Maxima.Phi);
+                    if(swap_to_j) {minmax_check(-dphi,&GasGradDataPasser[j].Minima.Phi,&GasGradDataPasser[j].Maxima.Phi);}
                 }
 
                 // dphi = phi_j - phi_i :: if phi_i = 0, dphi = phi_j //
@@ -1671,18 +1660,18 @@ int GasGrad_evaluate(int target, int mode, int *exportflag, int *exportnodecount
                     if(swap_to_j) {if(kernel.r > GasGradDataPasser[j].MaxDistance) {GasGradDataPasser[j].MaxDistance = kernel.r;}}
 
                     double d_rho = CellP[j].Density - local.GQuant.Density;
-                    MINMAX_CHECK(d_rho,out.Minima.Density,out.Maxima.Density);
-                    if(swap_to_j) {MINMAX_CHECK(-d_rho,GasGradDataPasser[j].Minima.Density,GasGradDataPasser[j].Maxima.Density);}
+                    minmax_check(d_rho,&out.Minima.Density,&out.Maxima.Density);
+                    if(swap_to_j) {minmax_check(-d_rho,&GasGradDataPasser[j].Minima.Density,&GasGradDataPasser[j].Maxima.Density);}
 
                     double dp = CellP[j].Pressure - local.GQuant.Pressure;
-                    MINMAX_CHECK(dp,out.Minima.Pressure,out.Maxima.Pressure);
-                    if(swap_to_j) {MINMAX_CHECK(-dp,GasGradDataPasser[j].Minima.Pressure,GasGradDataPasser[j].Maxima.Pressure);}
+                    minmax_check(dp,&out.Minima.Pressure,&out.Maxima.Pressure);
+                    if(swap_to_j) {minmax_check(-dp,&GasGradDataPasser[j].Minima.Pressure,&GasGradDataPasser[j].Maxima.Pressure);}
 
 #ifdef TURB_DIFF_DYNAMIC
                     double dv_bar[3]; for(k=0;k<3;k++) {dv_bar[k] = CellP[j].Velocity_bar[k] - local.GQuant.Velocity_bar[k];} /* Need to calculate the filtered velocity gradient for the filtered shear */
                     NGB_SHEARBOX_BOUNDARY_VELCORR_(local.Pos,P[j].Pos,dv_bar,-1); /* wrap velocities for shearing boxes if needed */
-                    for(k=0;k<3;k++) {MINMAX_CHECK(dv_bar[k], out.Minima.Velocity_bar[k], out.Maxima.Velocity_bar[k]);
-                        if(swap_to_j) {MINMAX_CHECK(-dv_bar[k], GasGradDataPasser[j].Minima.Velocity_bar[k], GasGradDataPasser[j].Maxima.Velocity_bar[k]);}}
+                    for(k=0;k<3;k++) {minmax_check(dv_bar[k],& out.Minima.Velocity_bar[k],& out.Maxima.Velocity_bar[k]);
+                        if(swap_to_j) {minmax_check(-dv_bar[k],& GasGradDataPasser[j].Minima.Velocity_bar[k],& GasGradDataPasser[j].Maxima.Velocity_bar[k]);}}
 #endif
 
                     
@@ -1728,8 +1717,8 @@ int GasGrad_evaluate(int target, int mode, int *exportflag, int *exportnodecount
                     double dv[3]; for(k=0;k<3;k++) {dv[k] = CellP[j].VelPred[k] - local.GQuant.Velocity[k];}
                     NGB_SHEARBOX_BOUNDARY_VELCORR_(local.Pos,P[j].Pos,dv,-1); /* wrap velocities for shearing boxes if needed */
                     for(k=0;k<3;k++) {
-                        MINMAX_CHECK(dv[k],out.Minima.Velocity[k],out.Maxima.Velocity[k]);
-                        if(swap_to_j) {MINMAX_CHECK(-dv[k],GasGradDataPasser[j].Minima.Velocity[k],GasGradDataPasser[j].Maxima.Velocity[k]);}
+                        minmax_check(dv[k],&out.Minima.Velocity[k],&out.Maxima.Velocity[k]);
+                        if(swap_to_j) {minmax_check(-dv[k],&GasGradDataPasser[j].Minima.Velocity[k],&GasGradDataPasser[j].Maxima.Velocity[k]);}
                     }
 
 #if defined(HYDRO_MESHLESS_FINITE_VOLUME) && (HYDRO_FIX_MESH_MOTION==6)
@@ -1743,22 +1732,22 @@ int GasGrad_evaluate(int target, int mode, int *exportflag, int *exportnodecount
 
 #ifdef DOGRAD_INTERNAL_ENERGY
                     double du = CellP[j].InternalEnergyPred - local.GQuant.InternalEnergy;
-                    MINMAX_CHECK(du,out.Minima.InternalEnergy,out.Maxima.InternalEnergy);
-                    if(swap_to_j) {MINMAX_CHECK(-du,GasGradDataPasser[j].Minima.InternalEnergy,GasGradDataPasser[j].Maxima.InternalEnergy);}
+                    minmax_check(du,&out.Minima.InternalEnergy,&out.Maxima.InternalEnergy);
+                    if(swap_to_j) {minmax_check(-du,&GasGradDataPasser[j].Minima.InternalEnergy,&GasGradDataPasser[j].Maxima.InternalEnergy);}
 #endif
 #ifdef COSMIC_RAY_FLUID
                     double dpCR[N_CR_PARTICLE_BINS];
                     for(k=0;k<N_CR_PARTICLE_BINS;k++)
                     {
                         dpCR[k] = Get_Gas_CosmicRayPressure(j,k) - local.GQuant.CosmicRayPressure[k];
-                        MINMAX_CHECK(dpCR[k],out.Minima.CosmicRayPressure[k],out.Maxima.CosmicRayPressure[k]);
-                        if(swap_to_j) {MINMAX_CHECK(-dpCR[k],GasGradDataPasser[j].Minima.CosmicRayPressure[k],GasGradDataPasser[j].Maxima.CosmicRayPressure[k]);}
+                        minmax_check(dpCR[k],&out.Minima.CosmicRayPressure[k],&out.Maxima.CosmicRayPressure[k]);
+                        if(swap_to_j) {minmax_check(-dpCR[k],&GasGradDataPasser[j].Minima.CosmicRayPressure[k],&GasGradDataPasser[j].Maxima.CosmicRayPressure[k]);}
                     }
 #endif
 #ifdef DOGRAD_SOUNDSPEED
                     double dc = Get_Gas_effective_soundspeed_i(j) - local.GQuant.SoundSpeed;
-                    MINMAX_CHECK(dc,out.Minima.SoundSpeed,out.Maxima.SoundSpeed);
-                    if(swap_to_j) {MINMAX_CHECK(-dc,GasGradDataPasser[j].Minima.SoundSpeed,GasGradDataPasser[j].Maxima.SoundSpeed);}
+                    minmax_check(dc,&out.Minima.SoundSpeed,&out.Maxima.SoundSpeed);
+                    if(swap_to_j) {minmax_check(-dc,&GasGradDataPasser[j].Minima.SoundSpeed,&GasGradDataPasser[j].Maxima.SoundSpeed);}
 #endif
 #ifdef MAGNETIC
                     double Bj[3],dB[3];
@@ -1767,22 +1756,22 @@ int GasGrad_evaluate(int target, int mode, int *exportflag, int *exportnodecount
                         Bj[k] = Get_Gas_BField(j,k);
                         NGB_SHEARBOX_BOUNDARY_BCORR_(local.Pos,P[j].Pos,Bj,-1); /* in a shearing box, wrap magnetic fields for shearing boxes if needed [literally does nothing if not shearing box here] */
                         dB[k] = Bj[k] - local.GQuant.B[k];
-                        MINMAX_CHECK(dB[k],out.Minima.B[k],out.Maxima.B[k]);
-                        if(swap_to_j) {MINMAX_CHECK(-dB[k],GasGradDataPasser[j].Minima.B[k],GasGradDataPasser[j].Maxima.B[k]);}
+                        minmax_check(dB[k],&out.Minima.B[k],&out.Maxima.B[k]);
+                        if(swap_to_j) {minmax_check(-dB[k],&GasGradDataPasser[j].Minima.B[k],&GasGradDataPasser[j].Maxima.B[k]);}
                     }
 #endif
 #if defined(DIVBCLEANING_DEDNER) && !defined(MHD_CONSTRAINED_GRADIENT_MIDPOINT)
                     double dphi = Get_Gas_PhiField(j) - local.GQuant.Phi;
-                    MINMAX_CHECK(dphi,out.Minima.Phi,out.Maxima.Phi);
-                    if(swap_to_j) {MINMAX_CHECK(-dphi,GasGradDataPasser[j].Minima.Phi,GasGradDataPasser[j].Maxima.Phi);}
+                    minmax_check(dphi,&out.Minima.Phi,&out.Maxima.Phi);
+                    if(swap_to_j) {minmax_check(-dphi,&GasGradDataPasser[j].Minima.Phi,&GasGradDataPasser[j].Maxima.Phi);}
 #endif
 #if defined(TURB_DIFF_METALS) && !defined(TURB_DIFF_METALS_LOWORDER)
                     double dmetal[NUM_METAL_SPECIES];
                     for(k = 0; k < NUM_METAL_SPECIES; k++)
                     {
                         dmetal[k] = P[j].Metallicity[k] - local.GQuant.Metallicity[k];
-                        MINMAX_CHECK(dmetal[k],out.Minima.Metallicity[k],out.Maxima.Metallicity[k]);
-                        if(swap_to_j) {MINMAX_CHECK(-dmetal[k],GasGradDataPasser[j].Minima.Metallicity[k],GasGradDataPasser[j].Maxima.Metallicity[k]);}
+                        minmax_check(dmetal[k],&out.Minima.Metallicity[k],&out.Maxima.Metallicity[k]);
+                        if(swap_to_j) {minmax_check(-dmetal[k],&GasGradDataPasser[j].Minima.Metallicity[k],&GasGradDataPasser[j].Maxima.Metallicity[k]);}
                     }
 #endif
 #ifdef RT_COMPGRAD_EDDINGTON_TENSOR
@@ -1793,16 +1782,16 @@ int GasGrad_evaluate(int target, int mode, int *exportflag, int *exportnodecount
                     {
                         int k_dE; for(k_dE=0;k_dE<6;k_dE++) {dnET[k][k_dE] = CellP[j].Rad_E_gamma_Pred[k]*CellP[j].ET[k][k_dE]*V_j_inv - local.GQuant.Rad_E_gamma[k]*local.GQuant.Rad_E_gamma_ET[k][k_dE]*V_i_inv;}
                         dn[k] = CellP[j].Rad_E_gamma_Pred[k]*V_j_inv - local.GQuant.Rad_E_gamma[k]*V_i_inv;
-                        MINMAX_CHECK(dn[k],out.Minima.Rad_E_gamma[k],out.Maxima.Rad_E_gamma[k]);
-                        if(swap_to_j) {MINMAX_CHECK(-dn[k],GasGradDataPasser[j].Minima.Rad_E_gamma[k],GasGradDataPasser[j].Maxima.Rad_E_gamma[k]);}
+                        minmax_check(dn[k],&out.Minima.Rad_E_gamma[k],&out.Maxima.Rad_E_gamma[k]);
+                        if(swap_to_j) {minmax_check(-dn[k],&GasGradDataPasser[j].Minima.Rad_E_gamma[k],&GasGradDataPasser[j].Maxima.Rad_E_gamma[k]);}
                     }
 #if defined(RT_M1_SECONDORDER) && defined(RT_EVOLVE_FLUX)
                     double dflux_rt[N_RT_FREQ_BINS][3];
                     {int k_f; for(k_f=0;k_f<N_RT_FREQ_BINS;k_f++) {
                         int k_d; for(k_d=0;k_d<3;k_d++) {
                             dflux_rt[k_f][k_d] = CellP[j].Rad_Flux_Pred[k_f][k_d]*V_j_inv - local.GQuant.Rad_Flux[k_f][k_d]*V_i_inv;
-                            MINMAX_CHECK(dflux_rt[k_f][k_d], out.Minima.Rad_Flux[k_f][k_d], out.Maxima.Rad_Flux[k_f][k_d]);
-                            if(swap_to_j) {MINMAX_CHECK(-dflux_rt[k_f][k_d], GasGradDataPasser[j].Minima.Rad_Flux[k_f][k_d], GasGradDataPasser[j].Maxima.Rad_Flux[k_f][k_d]);}
+                            minmax_check(dflux_rt[k_f][k_d],& out.Minima.Rad_Flux[k_f][k_d],& out.Maxima.Rad_Flux[k_f][k_d]);
+                            if(swap_to_j) {minmax_check(-dflux_rt[k_f][k_d],& GasGradDataPasser[j].Minima.Rad_Flux[k_f][k_d],& GasGradDataPasser[j].Maxima.Rad_Flux[k_f][k_d]);}
                         }
                     }}
 #endif

@@ -98,41 +98,41 @@ MyFloat Jgas_in_Kernel[3], Jstar_in_Kernel[3], Jalt_in_Kernel[3]; // mass/angula
 static inline void OUTPUTFUNCTION_NAME(struct OUTPUT_STRUCT_NAME *out, int i, int mode, int loop_iteration)
 {
     int target = P[i].IndexMapToTempStruc, k=0;
-    ASSIGN_ADD(SinkTempInfo[target].Sink_SurroudingGasInternalEnergy,out->Sink_SurroudingGasInternalEnergy,mode);
-    ASSIGN_ADD(SinkTempInfo[target].Mgas_in_Kernel,out->Mgas_in_Kernel,mode);
-    ASSIGN_ADD(SinkTempInfo[target].Mstar_in_Kernel,out->Mstar_in_Kernel,mode);
-    ASSIGN_ADD(SinkTempInfo[target].Malt_in_Kernel,out->Malt_in_Kernel,mode);
-    for(k=0;k<3;k++) {ASSIGN_ADD(SinkTempInfo[target].Jgas_in_Kernel[k],out->Jgas_in_Kernel[k],mode);}
-    for(k=0;k<3;k++) {ASSIGN_ADD(SinkTempInfo[target].Jstar_in_Kernel[k],out->Jstar_in_Kernel[k],mode);}
-    for(k=0;k<3;k++) {ASSIGN_ADD(SinkTempInfo[target].Jalt_in_Kernel[k],out->Jalt_in_Kernel[k],mode);}
+    assign_add(&(SinkTempInfo[target].Sink_SurroudingGasInternalEnergy),(out->Sink_SurroudingGasInternalEnergy),(mode));
+    assign_add(&(SinkTempInfo[target].Mgas_in_Kernel),(out->Mgas_in_Kernel),(mode));
+    assign_add(&(SinkTempInfo[target].Mstar_in_Kernel),(out->Mstar_in_Kernel),(mode));
+    assign_add(&(SinkTempInfo[target].Malt_in_Kernel),(out->Malt_in_Kernel),(mode));
+    for(k=0;k<3;k++) {assign_add(&(SinkTempInfo[target].Jgas_in_Kernel[k]),(out->Jgas_in_Kernel[k]),(mode));}
+    for(k=0;k<3;k++) {assign_add(&(SinkTempInfo[target].Jstar_in_Kernel[k]),(out->Jstar_in_Kernel[k]),(mode));}
+    for(k=0;k<3;k++) {assign_add(&(SinkTempInfo[target].Jalt_in_Kernel[k]),(out->Jalt_in_Kernel[k]),(mode));}
 #ifdef SINK_REPOSITION_ON_POTMIN
-    ASSIGN_ADD(SinkTempInfo[target].DF_rms_vel,out->DF_rms_vel,mode);
-    for(k=0;k<3;k++) {ASSIGN_ADD(SinkTempInfo[target].DF_mean_vel[k],out->DF_mean_vel[k],mode);}
+    assign_add(&(SinkTempInfo[target].DF_rms_vel),(out->DF_rms_vel),(mode));
+    for(k=0;k<3;k++) {assign_add(&(SinkTempInfo[target].DF_mean_vel[k]),(out->DF_mean_vel[k]),(mode));}
     if(mode==0) {SinkTempInfo[target].DF_mmax_particles = out->DF_mmax_particles;}
         else {if(out->DF_mmax_particles > SinkTempInfo[target].DF_mmax_particles) {SinkTempInfo[target].DF_mmax_particles = out->DF_mmax_particles;}}
 #endif
 #if defined(SINK_OUTPUT_MOREINFO)
-    ASSIGN_ADD(SinkTempInfo[target].Sfr_in_Kernel,out->Sfr_in_Kernel,mode);
+    assign_add(&(SinkTempInfo[target].Sfr_in_Kernel),(out->Sfr_in_Kernel),(mode));
 #endif
 #if (SINK_GRAVACCRETION >= 5) || defined(SINGLE_STAR_SINK_DYNAMICS) || defined(SINGLE_STAR_TIMESTEPPING)
-    for(k=0;k<3;k++) {ASSIGN_ADD(SinkTempInfo[target].Sink_SurroundingGasVel[k],out->Sink_SurroundingGasVel[k],mode);}
+    for(k=0;k<3;k++) {assign_add(&(SinkTempInfo[target].Sink_SurroundingGasVel[k]),(out->Sink_SurroundingGasVel[k]),(mode));}
 #endif
 #if defined(JET_DIRECTION_FROM_KERNEL_AND_SINK)
-    for(k=0;k<3;k++) {ASSIGN_ADD(SinkTempInfo[target].Sink_SurroundingGasCOM[k],out->Sink_SurroundingGasCOM[k],mode);}
+    for(k=0;k<3;k++) {assign_add(&(SinkTempInfo[target].Sink_SurroundingGasCOM[k]),(out->Sink_SurroundingGasCOM[k]),(mode));}
 #endif    
 #if (SINK_GRAVACCRETION == 8)
-    ASSIGN_ADD(SinkTempInfo[target].hubber_mdot_bondi_limiter,out->hubber_mdot_bondi_limiter,mode);
-    ASSIGN_ADD(SinkTempInfo[target].hubber_mdot_vr_estimator,out->hubber_mdot_vr_estimator,mode);
-    ASSIGN_ADD(SinkTempInfo[target].hubber_mdot_disk_estimator,out->hubber_mdot_disk_estimator,mode);
+    assign_add(&(SinkTempInfo[target].hubber_mdot_bondi_limiter),(out->hubber_mdot_bondi_limiter),(mode));
+    assign_add(&(SinkTempInfo[target].hubber_mdot_vr_estimator),(out->hubber_mdot_vr_estimator),(mode));
+    assign_add(&(SinkTempInfo[target].hubber_mdot_disk_estimator),(out->hubber_mdot_disk_estimator),(mode));
 #endif
 #if defined(SINK_GRAVCAPTURE_GAS)
-    ASSIGN_ADD(SinkTempInfo[target].mass_to_swallow_edd, out->mass_to_swallow_edd, mode);
+    assign_add(&(SinkTempInfo[target].mass_to_swallow_edd),(out->mass_to_swallow_edd),(mode));
 #endif
 #if defined(SINK_RETURN_ANGMOM_TO_GAS)
-    for(k=0;k<3;k++) {ASSIGN_ADD(SinkTempInfo[target].angmom_prepass_sum_for_passback[k],out->angmom_prepass_sum_for_passback[k],mode);}
+    for(k=0;k<3;k++) {assign_add(&(SinkTempInfo[target].angmom_prepass_sum_for_passback[k]),(out->angmom_prepass_sum_for_passback[k]),(mode));}
 #endif
 #if defined(SINK_RETURN_BFLUX)
-    ASSIGN_ADD(SinkTempInfo[target].kernel_norm_topass_in_swallowloop,out->kernel_norm_topass_in_swallowloop,mode);
+    assign_add(&(SinkTempInfo[target].kernel_norm_topass_in_swallowloop),(out->kernel_norm_topass_in_swallowloop),(mode));
 #endif    
 }
 
@@ -354,8 +354,8 @@ struct OUTPUT_STRUCT_NAME
 static inline void OUTPUTFUNCTION_NAME(struct OUTPUT_STRUCT_NAME *out, int i, int mode, int loop_iteration)
 {
     int target = P[i].IndexMapToTempStruc;
-    ASSIGN_ADD(SinkTempInfo[target].MgasBulge_in_Kernel,out->MgasBulge_in_Kernel,mode);
-    ASSIGN_ADD(SinkTempInfo[target].MstarBulge_in_Kernel,out->MstarBulge_in_Kernel,mode);
+    assign_add(&(SinkTempInfo[target].MgasBulge_in_Kernel),(out->MgasBulge_in_Kernel),(mode));
+    assign_add(&(SinkTempInfo[target].MstarBulge_in_Kernel),(out->MstarBulge_in_Kernel),(mode));
 }
 
 /* this subroutine does the actual neighbor-element calculations (this is the 'core' of the loop, essentially) */

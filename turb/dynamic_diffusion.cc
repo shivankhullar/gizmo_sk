@@ -29,11 +29,6 @@
 
 #ifdef TURB_DIFF_DYNAMIC
 
-#define ASSIGN_ADD_PRESET(x,y,mode) (x+=y)
-#define MINMAX_CHECK(x,xmin,xmax) ((x<xmin)?(xmin=x):((x>xmax)?(xmax=x):(1)))
-#define SHOULD_I_USE_SPH_GRADIENTS(condition_number) ((condition_number > CONDITION_NUMBER_DANGER) ? (1):(0))
-#define MAX_ADD(x,y,mode) ((y > x) ? (x = y) : (1)) // simpler definition now used
-#define MIN_ADD(x,y,mode) ((y < x) ? (x = y) : (1))
 #define NV_MYSIGN(x) (( x > 0 ) - ( x < 0 ))
 
 
@@ -132,7 +127,7 @@ static inline void particle2in_DynamicDiff(struct DynamicDiffdata_in *in, int i,
     in->DelayTime = CellP[i].DelayTime;
 #endif
 
-    if (SHOULD_I_USE_SPH_GRADIENTS(CellP[i].ConditionNumber)) {in->Mass *= -1;}
+    if (should_i_use_sph_gradients(CellP[i].ConditionNumber)) {in->Mass *= -1;}
 }
 
 
@@ -142,9 +137,9 @@ static inline void out2particle_DynamicDiff_iter(struct DynamicDiffdata_out_iter
     int j, k;
     for (j = 0; j < 3; j++) {
         for (k = 0; k < 3; k++) {
-            ASSIGN_ADD_PRESET(DynamicDiffDataPasser[i].dynamic_fac[j][k], out->dynamic_fac[j][k], mode);
+            assign_add(&DynamicDiffDataPasser[i].dynamic_fac[j][k], out->dynamic_fac[j][k], 1);
 #ifdef OUTPUT_TURB_DIFF_DYNAMIC_ERROR
-            ASSIGN_ADD_PRESET(DynamicDiffDataPasser[i].dynamic_fac_const[j][k], out->dynamic_fac_const[j][k], mode);
+            assign_add(&DynamicDiffDataPasser[i].dynamic_fac_const[j][k], out->dynamic_fac_const[j][k], 1);
 #endif
         } 
     }
@@ -153,17 +148,17 @@ static inline void out2particle_DynamicDiff_iter(struct DynamicDiffdata_out_iter
 static inline void out2particle_DynamicDiff(struct DynamicDiffdata_out *out, int i, int mode, int dynamic_iteration) {
     if (dynamic_iteration == 0) {
         int j, k;
-        MAX_ADD(DynamicDiffDataPasser[i].FilterWidth_hat, out->FilterWidth_hat, mode);
-        ASSIGN_ADD_PRESET(DynamicDiffDataPasser[i].Dynamic_numerator_hat, out->Dynamic_numerator_hat, mode);
-        ASSIGN_ADD_PRESET(DynamicDiffDataPasser[i].Dynamic_denominator_hat, out->Dynamic_denominator_hat, mode);
+        max_add(&DynamicDiffDataPasser[i].FilterWidth_hat, out->FilterWidth_hat);
+        assign_add(&DynamicDiffDataPasser[i].Dynamic_numerator_hat, out->Dynamic_numerator_hat, 1);
+        assign_add(&DynamicDiffDataPasser[i].Dynamic_denominator_hat, out->Dynamic_denominator_hat, 1);
 
         for (j = 0; j < 3; j++) {
-            MAX_ADD(DynamicDiffDataPasser[i].Maxima.Velocity_hat[j], out->Maxima.Velocity_hat[j], mode);
-            MIN_ADD(DynamicDiffDataPasser[i].Minima.Velocity_hat[j], out->Minima.Velocity_hat[j], mode);
+            max_add(&DynamicDiffDataPasser[i].Maxima.Velocity_hat[j], out->Maxima.Velocity_hat[j]);
+            min_add(&DynamicDiffDataPasser[i].Minima.Velocity_hat[j], out->Minima.Velocity_hat[j]);
 
             for (k = 0; k < 3; k++) {
-                ASSIGN_ADD_PRESET(DynamicDiffDataPasser[i].ProductVelocity_hat[j][k], out->ProductVelocity_hat[j][k], mode);
-                ASSIGN_ADD_PRESET(DynamicDiffDataPasser[i].GradVelocity_hat[j][k], out->Gradients[k].Velocity_hat[j], mode);
+                assign_add(&DynamicDiffDataPasser[i].ProductVelocity_hat[j][k], out->ProductVelocity_hat[j][k], 1);
+                assign_add(&DynamicDiffDataPasser[i].GradVelocity_hat[j][k], out->Gradients[k].Velocity_hat[j], 1);
             }
         }
     }  // dynamic_iteration == 0
@@ -808,7 +803,7 @@ int DynamicDiff_evaluate(int target, int mode, int *exportflag, int *exportnodec
                     /* Need to calculate the filtered velocity gradient for the filtered shear */
                     double dv_hat[3]; for (k=0;k<3;k++) {dv_hat[k] = CellP[j].Velocity_hat[k] - local.Velocity_hat[k];}
                     NGB_SHEARBOX_BOUNDARY_VELCORR_(local.Pos,P[j].Pos,dv_hat,-1); /* wrap velocities for shearing boxes if needed */
-                    for (k=0;k<3;k++) {MINMAX_CHECK(dv_hat[k], out.Minima.Velocity_hat[k], out.Maxima.Velocity_hat[k]);}
+                    for (k=0;k<3;k++) {minmax_check(dv_hat[k], &out.Minima.Velocity_hat[k], &out.Maxima.Velocity_hat[k]);}
 
                     double hinv_forgrad, hinv3_forgrad, hinv4_forgrad, u_forgrad, wk_i_forgrad, dwk_i_forgrad;
                     if (kernel.r < local.KernelRadius) {

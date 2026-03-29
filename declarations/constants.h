@@ -65,7 +65,6 @@
 #define  HYDROGEN_MASSFRAC 1.0  /*!< mass fraction of hydrogen, relevant only for radiative cooling */
 #endif
 
-#define nH_CGS(i) HYDROGEN_MASSFRAC * UNIT_DENSITY_IN_CGS * CellP[i].Density * All.cf_a3inv / PROTONMASS_CGS
 
 #define  MAX_REAL_NUMBER  1e56
 #define  MIN_REAL_NUMBER  1e-56
@@ -127,21 +126,9 @@
 #ifndef C_LIGHT_CODE
 #define C_LIGHT_CODE            ((C_LIGHT_CGS/UNIT_VEL_IN_CGS)) /* pure convenience function, speed-of-light in code units */
 #endif
-#ifdef RT_SPEEDOFLIGHT_REDUCTION_VARIABLE_RSL
-#define C_LIGHT_CODE_REDUCED(i) (((c_light_RSL_reductionfactor_local(i))*(C_LIGHT_CODE))) /* reduced speed-of-light in code units, again here as a convenience function */
-#else
-#define C_LIGHT_CODE_REDUCED(i) (((RT_SPEEDOFLIGHT_REDUCTION)*(C_LIGHT_CODE))) /* reduced speed-of-light in code units, again here as a convenience function, but just returns constant */
-#endif
+
 #define H0_CGS                  ((All.HubbleParam*HUBBLE_H100_CGS)) /* actual value of H0 in cgs */
 #define COSMIC_BARYON_DENSITY_CGS ((All.OmegaBaryon*(H0_CGS)*(H0_CGS)*(3./(8.*M_PI*GRAVITY_G_CGS))*All.cf_a3inv)) /* cosmic mean baryon density [scale-factor-dependent] in cgs units */
-
-
-
-#ifdef RT_COMOVING
-#define RSOL_CORRECTION_FACTOR_FOR_VELOCITY_TERMS(i) (0) /* this prefactor goes in front of various terms which vanish in the comoving frame RHD equations */
-#else
-#define RSOL_CORRECTION_FACTOR_FOR_VELOCITY_TERMS(i) ((C_LIGHT_CODE_REDUCED(i))/(C_LIGHT_CODE)) /* these terms in the mixed-frame equations need to be multiplied by c_reduced/c */
-#endif
 
 
 #ifdef GALSF_FB_FIRE_RT_HIIHEATING

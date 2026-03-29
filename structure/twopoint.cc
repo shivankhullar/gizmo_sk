@@ -38,7 +38,7 @@ struct twopointdata_in
  *TwoPointDataIn, *TwoPointDataGet;
 
 
-#define SQUARE_IT(x) ((x)*(x))
+static inline double square_it(double x) { return x*x; }
 
 
 static long long Count[BINS_TP], Count_bak[BINS_TP];

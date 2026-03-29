@@ -331,10 +331,6 @@ struct OUTPUT_STRUCT_NAME
 }
 *DATARESULT_NAME, *DATAOUT_NAME;
 
-#define ASSIGN_ADD_PRESET(x,y,mode) (mode == 0 ? (x=y) : (x+=y))
-#define MINMAX_CHECK(x,xmin,xmax) ((x<xmin)?(xmin=x):((x>xmax)?(xmax=x):(1)))
-#define MAX_ADD(x,y,mode) ((y > x) ? (x = y) : (1)) // simpler definition now used
-#define MIN_ADD(x,y,mode) ((y < x) ? (x = y) : (1))
 
 /* this subroutine assigns the values to the variables that need to be sent -back to- the 'searching' element */
 static inline void out2particle_DMGrad(struct OUTPUT_STRUCT_NAME *out, int i, int mode, int loop_iteration)
@@ -342,23 +338,23 @@ static inline void out2particle_DMGrad(struct OUTPUT_STRUCT_NAME *out, int i, in
     if(loop_iteration <= 0)
     {
         int k;
-        MAX_ADD(DMGradDataPasser[i].Maxima.AGS_Density,out->Maxima.AGS_Density,mode);
-        MIN_ADD(DMGradDataPasser[i].Minima.AGS_Density,out->Minima.AGS_Density,mode);
-        for(k=0;k<3;k++) {ASSIGN_ADD_PRESET(P[i].AGS_Gradients_Density[k],out->Gradients[k].AGS_Density,mode);}
+        max_add(&DMGradDataPasser[i].Maxima.AGS_Density,out->Maxima.AGS_Density);
+        min_add(&DMGradDataPasser[i].Minima.AGS_Density,out->Minima.AGS_Density);
+        for(k=0;k<3;k++) {assign_add(&P[i].AGS_Gradients_Density[k],out->Gradients[k].AGS_Density,mode);}
 #if (DM_FUZZY > 0)
-        for(k=0;k<3;k++) {ASSIGN_ADD_PRESET(P[i].AGS_Gradients_Psi_Re[k],out->Gradients[k].AGS_Psi_Re,mode);}
-        for(k=0;k<3;k++) {ASSIGN_ADD_PRESET(P[i].AGS_Gradients_Psi_Im[k],out->Gradients[k].AGS_Psi_Im,mode);}
+        for(k=0;k<3;k++) {assign_add(&P[i].AGS_Gradients_Psi_Re[k],out->Gradients[k].AGS_Psi_Re,mode);}
+        for(k=0;k<3;k++) {assign_add(&P[i].AGS_Gradients_Psi_Im[k],out->Gradients[k].AGS_Psi_Im,mode);}
 #endif
     } else {
         int k,k2;
         for(k=0;k<3;k++)
         {
-            MAX_ADD(DMGradDataPasser[i].Maxima.AGS_Gradients_Density[k],out->Maxima.AGS_Gradients_Density[k],mode);
-            MIN_ADD(DMGradDataPasser[i].Minima.AGS_Gradients_Density[k],out->Minima.AGS_Gradients_Density[k],mode);
-            for(k2=0;k2<3;k2++) {ASSIGN_ADD_PRESET(P[i].AGS_Gradients2_Density[k2][k],out->Gradients[k].AGS_Gradients_Density[k2],mode);}
+            max_add(&DMGradDataPasser[i].Maxima.AGS_Gradients_Density[k],out->Maxima.AGS_Gradients_Density[k]);
+            min_add(&DMGradDataPasser[i].Minima.AGS_Gradients_Density[k],out->Minima.AGS_Gradients_Density[k]);
+            for(k2=0;k2<3;k2++) {assign_add(&P[i].AGS_Gradients2_Density[k2][k],out->Gradients[k].AGS_Gradients_Density[k2],mode);}
 #if (DM_FUZZY > 0)
-            for(k2=0;k2<3;k2++) {ASSIGN_ADD_PRESET(P[i].AGS_Gradients2_Psi_Re[k2][k],out->Gradients[k].AGS_Gradients_Psi_Re[k2],mode);}
-            for(k2=0;k2<3;k2++) {ASSIGN_ADD_PRESET(P[i].AGS_Gradients2_Psi_Im[k2][k],out->Gradients[k].AGS_Gradients_Psi_Im[k2],mode);}
+            for(k2=0;k2<3;k2++) {assign_add(&P[i].AGS_Gradients2_Psi_Re[k2][k],out->Gradients[k].AGS_Gradients_Psi_Re[k2],mode);}
+            for(k2=0;k2<3;k2++) {assign_add(&P[i].AGS_Gradients2_Psi_Im[k2][k],out->Gradients[k].AGS_Gradients_Psi_Im[k2],mode);}
 #endif
         }
         // do we need limiters here for the density gradients? Not clear if this all needs computing
@@ -423,7 +419,7 @@ int DMGrad_evaluate(int target, int mode, int *exportflag, int *exportnodecount,
                 if(loop_iteration <= 0)
                 {
                     double d_rho = P[j].AGS_Density - local.GQuant.AGS_Density;
-                    MINMAX_CHECK(d_rho,out.Minima.AGS_Density,out.Maxima.AGS_Density);
+                    minmax_check(d_rho,&out.Minima.AGS_Density,&out.Maxima.AGS_Density);
                     for(k=0;k<3;k++) {out.Gradients[k].AGS_Density += -kernel.wk_i * kernel.dp[k] * d_rho;} /* sign is important here! */
 #if (DM_FUZZY > 0)
                     d_rho = P[j].AGS_Psi_Re_Pred * P[j].AGS_Density / P[j].Mass - local.GQuant.AGS_Psi_Re;
@@ -436,7 +432,7 @@ int DMGrad_evaluate(int target, int mode, int *exportflag, int *exportnodecount,
                     for(k=0;k<3;k++)
                     {
                         d_grad_rho = P[j].AGS_Gradients_Density[k] - local.GQuant.AGS_Gradients_Density[k];
-                        MINMAX_CHECK(d_grad_rho,out.Minima.AGS_Gradients_Density[k],out.Maxima.AGS_Gradients_Density[k]);
+                        minmax_check(d_grad_rho,&out.Minima.AGS_Gradients_Density[k],&out.Maxima.AGS_Gradients_Density[k]);
                         for(k2=0;k2<3;k2++) {out.Gradients[k2].AGS_Gradients_Density[k] += -kernel.wk_i * kernel.dp[k2] * d_grad_rho;}
 #if (DM_FUZZY > 0)
                         d_grad_rho = P[j].AGS_Gradients_Psi_Re[k] - local.GQuant.AGS_Gradients_Psi_Re[k];

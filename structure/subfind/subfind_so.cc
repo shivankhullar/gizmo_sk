@@ -68,14 +68,14 @@ int Subfind_DensityOtherProps_evaluate(int target, int mode, int *nexport, int *
 /*! add data from other processors back to shared structure after computation. usually ASSIGN_ADD for normal 'set it equal if initial step, then add', but here in case you need to take maxes or mins or other complicated operations */
 static inline void out2particle_Subfind_DensityOtherPropsEval(struct Subfind_DensityOtherPropsEval_data_out *out, int i, int mode)
 {
-    ASSIGN_ADD(Subfind_DensityOtherPropsEval_GlobalPasser[i].M200,out->M200,mode);
+    assign_add(&(Subfind_DensityOtherPropsEval_GlobalPasser[i].M200),(out->M200),(mode));
 #ifdef SUBFIND_ADDIO_VELDISP
-    {int k; for(k=0;k<3;k++) {ASSIGN_ADD(Subfind_DensityOtherPropsEval_GlobalPasser[i].V200[k],out->V200[k],mode);}}
-    ASSIGN_ADD(Subfind_DensityOtherPropsEval_GlobalPasser[i].Disp200,out->Disp200,mode);
+    {int k; for(k=0;k<3;k++) {assign_add(&(Subfind_DensityOtherPropsEval_GlobalPasser[i].V200[k]),(out->V200[k]),(mode));}}
+    assign_add(&(Subfind_DensityOtherPropsEval_GlobalPasser[i].Disp200),(out->Disp200),(mode));
 #endif
 #ifdef SUBFIND_ADDIO_BARYONS
-    ASSIGN_ADD(Subfind_DensityOtherPropsEval_GlobalPasser[i].gas_mass,out->gas_mass,mode); ASSIGN_ADD(Subfind_DensityOtherPropsEval_GlobalPasser[i].temp,out->temp,mode); ASSIGN_ADD(Subfind_DensityOtherPropsEval_GlobalPasser[i].xlum,out->xlum,mode);
-    ASSIGN_ADD(Subfind_DensityOtherPropsEval_GlobalPasser[i].star_mass,out->star_mass,mode);
+    assign_add(&(Subfind_DensityOtherPropsEval_GlobalPasser[i].gas_mass),(out->gas_mass),(mode)); assign_add(&(Subfind_DensityOtherPropsEval_GlobalPasser[i].temp),(out->temp),(mode)); assign_add(&(Subfind_DensityOtherPropsEval_GlobalPasser[i].xlum),(out->xlum),(mode));
+    assign_add(&(Subfind_DensityOtherPropsEval_GlobalPasser[i].star_mass),(out->star_mass),(mode));
 #endif
 }
 

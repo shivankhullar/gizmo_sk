@@ -134,7 +134,7 @@ void find_timesteps(void)
         if(bin > binold)		/* timestep wants to increase */
         {
             while(TimeBinActive[bin] == 0 && bin > binold) {bin--;}	/* make sure the new step is synchronized */
-            ti_step = GET_INTEGERTIME_FROM_TIMEBIN(bin);
+            ti_step = get_integertime_from_timebin(bin);
         }
         if(All.Ti_Current >= TIMEBASE) {ti_step = 0; bin = 0;} /* we here finish the last timestep. */
 
@@ -198,7 +198,7 @@ void find_timesteps(void)
         }
 
 #ifndef WAKEUP
-        ti_step_old = GET_INTEGERTIME_FROM_TIMEBIN(binold);
+        ti_step_old = get_integertime_from_timebin(binold);
 #else
         ti_step_old = P[i].dt_step;
 #endif
@@ -258,7 +258,7 @@ void find_timesteps(void)
             bin = get_timestep_bin(ti_step);
             binold = get_timestep_bin(All.PM_Ti_endstep - All.PM_Ti_begstep);
             while(TimeBinActive[bin] == 0 && bin > binold) {bin--;}	/* make sure the new step is synchronized */
-            ti_step = GET_INTEGERTIME_FROM_TIMEBIN(bin);
+            ti_step = get_integertime_from_timebin(bin);
         }
         if(All.Ti_Current == TIMEBASE) {ti_step = 0;} /* we here finish the last timestep. */
         All.PM_Ti_begstep = All.PM_Ti_endstep;
@@ -535,7 +535,7 @@ integertime get_timestep(int p,		/*!< particle index */
         if(dt_courant < dt) dt = dt_courant;
     }
 #ifdef GRAIN_RDI_TESTPROBLEM_LIVE_RADIATION_INJECTION
-    if(P[p].Type>-1) {double dt_inj = 0.1 * P[p].KernelRadius / C_LIGHT_CODE_REDUCED(p); if(P[p].Type==4) {dt_inj*=0.25;} if(dt_inj < dt) {dt = dt_inj;}}
+    if(P[p].Type>-1) {double dt_inj = 0.1 * P[p].KernelRadius / c_light_code_reduced(p); if(P[p].Type==4) {dt_inj*=0.25;} if(dt_inj < dt) {dt = dt_inj;}}
 #endif
 #endif
 
@@ -621,7 +621,7 @@ integertime get_timestep(int p,		/*!< particle index */
                     double CRPressureGradScaleLength = Get_CosmicRayGradientLength(p,k_CRegy);
                     double L_cr_weak; L_cr_weak = CRPressureGradScaleLength;
                     double kappa_cr_eff = fabs(CellP[p].CosmicRayDiffusionCoeff[k_CRegy]);
-                    kappa_cr_eff *= CosmicRayFluid_RSOL_Corrfac(k_CRegy); // account for RSOL factor as it actually appears in the flux eqn in code units with this RSOL form
+                    kappa_cr_eff *= cosmicrayfluid_rsol_corrfac(k_CRegy); // account for RSOL factor as it actually appears in the flux eqn in code units with this RSOL form
                     double L_cr_strong = DMAX(L_particle*All.cf_atime , 1./(1./CRPressureGradScaleLength + 1./(L_particle*All.cf_atime)));
                     double coeff_inv = 0.67 * L_cr_strong * dt_prefac_diffusion / (1.e-33 + kappa_cr_eff * (GAMMA_COSMICRAY(k_CRegy)-1.));
                     double dt_conduction =  L_cr_strong * coeff_inv; /* true diffusion requires the stronger timestep criterion be applied */
@@ -698,7 +698,7 @@ integertime get_timestep(int p,		/*!< particle index */
                     double dt_rt_work = All.CourantFac * DMIN( L_RT_diffusion / csnd , L_particle*All.cf_atime / ((2./3.)*sqrt(CellP[p].Rad_E_gamma[kf]/P[p].Mass)) ); /* time-step related to radiation work, radiation soundspeed, relevant in strongly-coupled limit */
 #ifdef RT_FLUXLIMITER /* if we are flux-limited, we can account for the flux limiter making the timestep advective */
                     if(dt_advective > dt_rt_diffusion) {dt_rt_diffusion *= 1. + (1.-CellP[p].Rad_Flux_Limiter[kf]) * DMAX(0,(dt_advective/dt_rt_diffusion-1.));}
-                    dt_advective = All.CourantFac * 0.5 * (L_particle*All.cf_atime) / C_LIGHT_CODE_REDUCED(p);
+                    dt_advective = All.CourantFac * 0.5 * (L_particle*All.cf_atime) / c_light_code_reduced(p);
                     dt_rt_diffusion = DMAX(dt_rt_diffusion, dt_advective);
                     dt_rt_work /= MIN_REAL_NUMBER + CellP[p].Rad_Flux_Limiter[kf];
                     if((CellP[p].Rad_Flux_Limiter[kf] <= 0)||(dt_rt_diffusion<=0)) {dt_rt_diffusion = 1.e9 * dt;}
@@ -728,11 +728,11 @@ integertime get_timestep(int p,		/*!< particle index */
                 
                 /* now consider the (simpler) CFL-type condition required for advective solvers like M1 or intensity/ray integrators */
 #if defined(RT_M1) || defined(RT_LOCALRAYGRID)
-                dt_courant = All.CourantFac * (L_particle*All.cf_atime) / C_LIGHT_CODE_REDUCED(p); /* courant-type criterion, using the reduced speed of light */
+                dt_courant = All.CourantFac * (L_particle*All.cf_atime) / c_light_code_reduced(p); /* courant-type criterion, using the reduced speed of light */
 #if defined(SINGLE_STAR_STARFORGE_DEFAULTS)
-                dt_courant = 0.4 * (L_particle*All.cf_atime) / C_LIGHT_CODE_REDUCED(p); /* hacked here for starforge, where mike's experimentation suggests we can get away with a slightly larger courant factor. remains experimental. courant-type criterion, using the reduced speed of light - here we hardcode the most aggressive possible Courant factor as an optimization */
+                dt_courant = 0.4 * (L_particle*All.cf_atime) / c_light_code_reduced(p); /* hacked here for starforge, where mike's experimentation suggests we can get away with a slightly larger courant factor. remains experimental. courant-type criterion, using the reduced speed of light - here we hardcode the most aggressive possible Courant factor as an optimization */
 #ifdef SINK_WIND_SPAWN
-                if((CellP[p].MaxSignalVel > 0.5*C_LIGHT_CODE_REDUCED(p)) || (P[p].ID == All.SpawnedWindCellID && P[p].Type == 0)) {dt_courant *= 0.5}; // be more careful if this is a jet cell or there are transluminal velocities
+                if((CellP[p].MaxSignalVel > 0.5*c_light_code_reduced(p)) || (P[p].ID == All.SpawnedWindCellID && P[p].Type == 0)) {dt_courant *= 0.5}; // be more careful if this is a jet cell or there are transluminal velocities
 #endif
 #endif                
 #if defined(GALSF) && !defined(SINGLE_STAR_SINK_DYNAMICS) && defined(GALSF_FB_FIRE_STELLAREVOLUTION) // custom hacks for FIRE-RT tests; can override CFL condition with diffusion timestep certain limits
@@ -873,7 +873,7 @@ integertime get_timestep(int p,		/*!< particle index */
                         while(TimeBinActive[bin] == 0 && bin > binold) {bin--;} /* make sure the new step is synchronized */
                     }
                     /* now convert this -back- to a physical timestep */
-                    double dt_allowed = GET_INTEGERTIME_FROM_TIMEBIN(bin) * UNIT_INTEGERTIME_IN_PHYSICAL(-1);
+                    double dt_allowed = get_integertime_from_timebin(bin) * UNIT_INTEGERTIME_IN_PHYSICAL(-1);
                     if(dt_superstep > 1.5*dt_allowed)
                     {
                         /* the next allowed timestep [because of synchronization] is not big enough to fit the 'big step'
@@ -1256,7 +1256,7 @@ void process_wake_ups(void)
         {
             if(n > 0)
             {
-                dt_bin = GET_INTEGERTIME_FROM_TIMEBIN(n);
+                dt_bin = get_integertime_from_timebin(n);
                 ti_next_for_bin = (All.Ti_Current / dt_bin) * dt_bin + dt_bin;	/* next kick time for this timebin */
             }
             else {dt_bin = 0; ti_next_for_bin = All.Ti_Current;}
@@ -1308,7 +1308,7 @@ void process_wake_ups(void)
 
 	    if(bin != binold)
 	    {
-		integertime dt_0 = GET_INTEGERTIME_FROM_TIMEBIN(P[i].TimeBin);
+		integertime dt_0 = get_integertime_from_timebin(P[i].TimeBin);
 		integertime tstart = P[i].Ti_begstep + dt_0;
 		integertime t_2 = P[i].Ti_current;
 		if(t_2 > tstart) {tstart = t_2;}
@@ -1351,7 +1351,7 @@ void process_wake_ups(void)
 		    set_predicted_quantities_for_extra_physics(i);
 		}
 		P[i].Ti_begstep = All.Ti_Current;
-		P[i].dt_step = GET_INTEGERTIME_FROM_TIMEBIN(bin);
+		P[i].dt_step = get_integertime_from_timebin(bin);
 		if(P[i].Ti_current < All.Ti_Current) {P[i].Ti_current=All.Ti_Current;}
 	    }
 	}

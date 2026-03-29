@@ -117,13 +117,13 @@ static struct OUTPUT_STRUCT_NAME
 void ags_out2particle_density(struct OUTPUT_STRUCT_NAME *out, int i, int mode, int loop_iteration);
 void ags_out2particle_density(struct OUTPUT_STRUCT_NAME *out, int i, int mode, int loop_iteration)
 {
-    ASSIGN_ADD(P[i].NumNgb, out->Ngb, mode);
-    ASSIGN_ADD(P[i].AGS_zeta, out->AGS_zeta,   mode);
+    assign_add(&(P[i].NumNgb),(out->Ngb),(mode));
+    assign_add(&(P[i].AGS_zeta),(out->AGS_zeta),(mode));
     if(out->AGS_vsig > P[i].AGS_vsig) {P[i].AGS_vsig = out->AGS_vsig;}
-    ASSIGN_ADD(P[i].Particle_DivVel, out->Particle_DivVel,   mode);
-    ASSIGN_ADD(P[i].DrkernNgbFactor, out->DrkernNgb, mode);
+    assign_add(&(P[i].Particle_DivVel),(out->Particle_DivVel),(mode));
+    assign_add(&(P[i].DrkernNgbFactor),(out->DrkernNgb),(mode));
 #if defined(AGS_FACE_CALCULATION_IS_ACTIVE)
-    {int j,k; for(k = 0; k < 3; k++) {for(j = 0; j < 3; j++) {ASSIGN_ADD(P[i].NV_T[k][j], out->NV_T[k][j], mode);}}}
+    {int j,k; for(k = 0; k < 3; k++) {for(j = 0; j < 3; j++) {assign_add(&(P[i].NV_T[k][j]),(out->NV_T[k][j]),(mode));}}}
 #endif
 }
 
@@ -812,31 +812,27 @@ struct OUTPUT_STRUCT_NAME
 }
 *DATARESULT_NAME, *DATAOUT_NAME;
 
-#define ASSIGN_ADD_PRESET(x,y,mode) (mode == 0 ? (x=y) : (x+=y))
-#define MINMAX_CHECK(x,xmin,xmax) ((x<xmin)?(xmin=x):((x>xmax)?(xmax=x):(1)))
-#define MAX_ADD(x,y,mode) ((y > x) ? (x = y) : (1)) // simpler definition now used
-#define MIN_ADD(x,y,mode) ((y < x) ? (x = y) : (1))
 
 static inline void OUTPUTFUNCTION_NAME(struct OUTPUT_STRUCT_NAME *out, int i, int mode, int loop_iteration)
 {
     int k,k2; k=0; k2=0;
 #if defined(DM_SIDM)
     for(k=0;k<3;k++) {P[i].Vel[k] += out->sidm_kick[k];}
-    MIN_ADD(P[i].dtime_sidm, out->dtime_sidm, mode);
+    min_add(&P[i].dtime_sidm, out->dtime_sidm);
     P[i].NInteractions += out->si_count;
 #endif
 #ifdef DM_FUZZY
     for(k=0;k<3;k++) {P[i].GravAccel[k] += out->acc[k];} // currently incompatible with hermite integrator -- need to update to Other_Accel
-    ASSIGN_ADD_PRESET(P[i].AGS_Dt_Numerical_QuantumPotential,out->AGS_Dt_Numerical_QuantumPotential,mode);
+    assign_add(&P[i].AGS_Dt_Numerical_QuantumPotential,out->AGS_Dt_Numerical_QuantumPotential,mode);
 #if (DM_FUZZY > 0)
-    ASSIGN_ADD_PRESET(P[i].AGS_Dt_Psi_Re,out->AGS_Dt_Psi_Re,mode);
-    ASSIGN_ADD_PRESET(P[i].AGS_Dt_Psi_Im,out->AGS_Dt_Psi_Im,mode);
-    ASSIGN_ADD_PRESET(P[i].AGS_Dt_Psi_Mass,out->AGS_Dt_Psi_Mass,mode);
+    assign_add(&P[i].AGS_Dt_Psi_Re,out->AGS_Dt_Psi_Re,mode);
+    assign_add(&P[i].AGS_Dt_Psi_Im,out->AGS_Dt_Psi_Im,mode);
+    assign_add(&P[i].AGS_Dt_Psi_Mass,out->AGS_Dt_Psi_Mass,mode);
 #endif
 #endif
 #ifdef CBE_INTEGRATOR
-    MAX_ADD(P[i].AGS_vsig,out->AGS_vsig,mode);
-    for(k=0;k<CBE_INTEGRATOR_NBASIS;k++) {for(k2=0;k2<CBE_INTEGRATOR_NMOMENTS;k2++) {ASSIGN_ADD_PRESET(P[i].CBE_basis_moments_dt[k][k2],out->CBE_basis_moments_dt[k][k2],mode);}}
+    max_add(&P[i].AGS_vsig,out->AGS_vsig);
+    for(k=0;k<CBE_INTEGRATOR_NBASIS;k++) {for(k2=0;k2<CBE_INTEGRATOR_NMOMENTS;k2++) {assign_add(&P[i].CBE_basis_moments_dt[k][k2],out->CBE_basis_moments_dt[k][k2],mode);}}
 #endif
 }
 

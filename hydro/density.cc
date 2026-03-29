@@ -188,33 +188,33 @@ static struct OUTPUT_STRUCT_NAME
 void hydrokerneldensity_out2particle(struct OUTPUT_STRUCT_NAME *out, int i, int mode, int loop_iteration)
 {
     int j,k;
-    ASSIGN_ADD(P[i].NumNgb, out->Ngb, mode);
-    ASSIGN_ADD(P[i].DrkernNgbFactor, out->DrkernNgb, mode);
-    ASSIGN_ADD(P[i].Particle_DivVel, out->Particle_DivVel,   mode);
+    assign_add(&(P[i].NumNgb),(out->Ngb),(mode));
+    assign_add(&(P[i].DrkernNgbFactor),(out->DrkernNgb),(mode));
+    assign_add(&(P[i].Particle_DivVel),(out->Particle_DivVel),(mode));
 
     if(P[i].Type == 0)
     {
-        ASSIGN_ADD(CellP[i].Density, out->Rho, mode);
+        assign_add(&(CellP[i].Density),(out->Rho),(mode));
 #if defined(HYDRO_MESHLESS_FINITE_VOLUME) && ((HYDRO_FIX_MESH_MOTION==5)||(HYDRO_FIX_MESH_MOTION==6))
-        for(k=0;k<3;k++) ASSIGN_ADD(CellP[i].ParticleVel[k], out->ParticleVel[k],   mode);
+        for(k=0;k<3;k++) assign_add(&(CellP[i].ParticleVel[k]),(out->ParticleVel[k]),(mode));
 #endif
-        for(k=0;k<3;k++) {for(j=0;j<3;j++) {ASSIGN_ADD(CellP[i].NV_T[k][j], out->NV_T[k][j], mode);}}
+        for(k=0;k<3;k++) {for(j=0;j<3;j++) {assign_add(&(CellP[i].NV_T[k][j]),(out->NV_T[k][j]),(mode));}}
 
 #ifdef HYDRO_SPH
-        ASSIGN_ADD(CellP[i].DrkernHydroSumFactor, out->DrkernHydroSumFactor, mode);
+        assign_add(&(CellP[i].DrkernHydroSumFactor),(out->DrkernHydroSumFactor),(mode));
 #endif
 #ifdef HYDRO_PRESSURE_SPH
-        ASSIGN_ADD(CellP[i].EgyWtDensity,   out->EgyRho,   mode);
+        assign_add(&(CellP[i].EgyWtDensity),(out->EgyRho),(mode));
 #endif
 #if defined(TURB_DRIVING)
-        for(k = 0; k < 3; k++) {ASSIGN_ADD(CellP[i].SmoothedVel[k], out->GasVel[k], mode);}
+        for(k = 0; k < 3; k++) {assign_add(&(CellP[i].SmoothedVel[k]),(out->GasVel[k]),(mode));}
 #endif
 #if defined(SPHAV_CD10_VISCOSITY_SWITCH)
         for(k = 0; k < 3; k++)
             for(j = 0; j < 3; j++)
             {
-                ASSIGN_ADD(CellP[i].NV_D[k][j], out->NV_D[k][j], mode);
-                ASSIGN_ADD(CellP[i].NV_A[k][j], out->NV_A[k][j], mode);
+                assign_add(&(CellP[i].NV_D[k][j]),(out->NV_D[k][j]),(mode));
+                assign_add(&(CellP[i].NV_A[k][j]),(out->NV_A[k][j]),(mode));
             }
 #endif
     } // P[i].Type == 0 //
@@ -222,25 +222,25 @@ void hydrokerneldensity_out2particle(struct OUTPUT_STRUCT_NAME *out, int i, int 
 #if defined(GRAIN_FLUID)
     if((1 << P[i].Type) & (GRAIN_PTYPES))
     {
-        ASSIGN_ADD(P[i].Gas_Density, out->Rho, mode);
-        ASSIGN_ADD(P[i].Gas_InternalEnergy, out->Gas_InternalEnergy, mode);
-        for(k = 0; k<3; k++) {ASSIGN_ADD(P[i].Gas_Velocity[k], out->GasVel[k], mode);}
+        assign_add(&(P[i].Gas_Density),(out->Rho),(mode));
+        assign_add(&(P[i].Gas_InternalEnergy),(out->Gas_InternalEnergy),(mode));
+        for(k = 0; k<3; k++) {assign_add(&(P[i].Gas_Velocity[k]),(out->GasVel[k]),(mode));}
 #if defined(GRAIN_LORENTZFORCE)
-        for(k = 0; k<3; k++) {ASSIGN_ADD(P[i].Gas_B[k], out->Gas_B[k], mode);}
+        for(k = 0; k<3; k++) {assign_add(&(P[i].Gas_B[k]),(out->Gas_B[k]),(mode));}
 #endif
     }
 #endif
 
 #ifdef DO_DENSITY_AROUND_NONGAS_PARTICLES
-    ASSIGN_ADD(P[i].DensityAroundParticle, out->Rho, mode);
-    for(k = 0; k<3; k++) {ASSIGN_ADD(P[i].GradRho[k], out->GradRho[k], mode);}
+    assign_add(&(P[i].DensityAroundParticle),(out->Rho),(mode));
+    for(k = 0; k<3; k++) {assign_add(&(P[i].GradRho[k]),(out->GradRho[k]),(mode));}
 #endif
 
 #if defined(RT_SOURCE_INJECTION)
 #if defined(RT_SINK_ANGLEWEIGHT_PHOTON_INJECTION)
     if(All.TimeStep == 0) // we only do this on the 0'th timestep, since we haven't done a sink loop yet to get the angle weights we'll use normally
 #endif
-    if((1 << P[i].Type) & (RT_SOURCES)) {ASSIGN_ADD(P[i].KernelSum_Around_RT_Source, out->KernelSum_Around_RT_Source, mode);}
+    if((1 << P[i].Type) & (RT_SOURCES)) {assign_add(&(P[i].KernelSum_Around_RT_Source),(out->KernelSum_Around_RT_Source),(mode));}
 #endif
 
 #ifdef SINK_PARTICLES
@@ -1078,7 +1078,7 @@ struct OUTPUT_STRUCT_NAME {MyFloat Volume_1;} *DATARESULT_NAME, *DATAOUT_NAME;
 
 /* define properties to be collected from nodes */
 void out2particle_cellcorrections(struct OUTPUT_STRUCT_NAME *out, int i, int mode, int loop_iteration)
-{ASSIGN_ADD(CellP[i].Volume_1, out->Volume_1, mode);}
+{assign_add(&(CellP[i].Volume_1),(out->Volume_1),(mode));}
 
 /* core subroutine. this does not write to shared memory. */
 int cellcorrections_evaluate(int target, int mode, int *exportflag, int *exportnodecount, int *exportindex, int *ngblist, int loop_iteration)

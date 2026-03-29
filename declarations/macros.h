@@ -10,7 +10,8 @@
 #define TIMESTEP_DILATION_FACTOR(i,mode) (1)
 #endif
 #define UNIT_INTEGERTIME_IN_PHYSICAL(i) ((All.Timebase_interval/All.cf_hubble_a) * TIMESTEP_DILATION_FACTOR(i,0))
-#define GET_INTEGERTIME_FROM_TIMEBIN(bin) ((bin ? (((integertime) 1) << bin) : 0))
+static inline long long get_integertime_from_timebin(int bin) { return bin ? (((long long) 1) << bin) : 0; }
+#define GET_INTEGERTIME_FROM_TIMEBIN(bin) get_integertime_from_timebin(bin)
 #define GET_PHYSICAL_TIMESTEP_FROM_TIMEBIN(bin, i) ((GET_INTEGERTIME_FROM_TIMEBIN(bin) * UNIT_INTEGERTIME_IN_PHYSICAL(i)))
 #ifndef WAKEUP
 #define GET_PARTICLE_INTEGERTIME(i) ((GET_INTEGERTIME_FROM_TIMEBIN(P[i].TimeBin)))
@@ -176,3 +177,12 @@ TMP_WRAP_Z_S(x,y,z,sign);} /* note the ORDER MATTERS here for shearing boxes: Y-
 
 #define MACRO_NAME_CONCATENATE(A, B) MACRO_NAME_CONCATENATE_(A, B)
 #define MACRO_NAME_CONCATENATE_(A, B) A##B
+
+
+/* inline functions replacing duplicated local macros across multiple files */
+static inline void assign_add(double *x, double y, int mode) { if(mode == 0) { *x = y; } else { *x += y; } }
+static inline void max_add(double *x, double y) { if(y > *x) *x = y; }
+static inline void min_add(double *x, double y) { if(y < *x) *x = y; }
+static inline void minmax_check(double x, double *xmin, double *xmax) { if(x < *xmin) *xmin = x; else if(x > *xmax) *xmax = x; }
+static inline int should_i_use_sph_gradients(double condition_number) { return (condition_number > CONDITION_NUMBER_DANGER) ? 1 : 0; }
+

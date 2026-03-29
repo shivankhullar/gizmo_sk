@@ -299,7 +299,7 @@ struct OUTPUT_STRUCT_NAME
 static inline void OUTPUTFUNCTION_NAME(struct OUTPUT_STRUCT_NAME *out, int i, int mode, int loop_iteration)
 {  /* "i" is the particle to which data from structure "out" will be assigned. mode=0 for local communication,
     =1 for data sent back from other processors. you must account for this. */
-    /* example: ASSIGN_ADD(P[i].X,out->X,mode); which is short for: if(mode==0) {P[i].X=out->X;} else {P[i].X+=out->X;} */
+    /* example: assign_add(&(P[i].X),(out->X),(mode)); which is short for: if(mode==0) {P[i].X=out->X;} else {P[i].X+=out->X;} */
 }
 
 
@@ -448,7 +448,7 @@ static inline void INPUTFUNCTION_NAME(struct INPUT_STRUCT_NAME *in, int i, int l
         for(k_freq=0;k_freq<N_RT_FREQ_BINS;k_freq++)
         {
             double Q_abs_eff = return_grain_extinction_efficiency_Q(i, k_freq); /* need this to calculate the absorption efficiency in each band */
-            in->Grain_Abs_Coeff[k_freq] = Q_abs_eff * 3. / (4. * C_LIGHT_CODE_REDUCED(j) * rho_grain_code * R_grain_code * rho_gas_code);
+            in->Grain_Abs_Coeff[k_freq] = Q_abs_eff * 3. / (4. * c_light_code_reduced(j) * rho_grain_code * R_grain_code * rho_gas_code);
         }
     }
 }
@@ -463,8 +463,8 @@ struct OUTPUT_STRUCT_NAME { /* define variables below as e.g. "double X;" */
 /* this subroutine assigns the values to the variables that need to be sent -back to- the 'searching' element */
 static inline void OUTPUTFUNCTION_NAME(struct OUTPUT_STRUCT_NAME *out, int i, int mode, int loop_iteration) {  /* "i" is the particle to which data from structure "out" will be assigned. mode=0 for local communication, =1 for data sent back from other processors. you must account for this. */
     int k,k_freq;
-    if(P[i].Type==0) {ASSIGN_ADD(CellP[i].InterpolatedGeometricDustCrossSection,out->InterpolatedGeometricDustCrossSection,mode);
-        for(k_freq=0;k_freq<N_RT_FREQ_BINS;k_freq++) {ASSIGN_ADD(CellP[i].Interpolated_Opacity[k_freq],out->Interpolated_Opacity[k_freq],mode);}}
+    if(P[i].Type==0) {assign_add(&(CellP[i].InterpolatedGeometricDustCrossSection),(out->InterpolatedGeometricDustCrossSection),(mode));
+        for(k_freq=0;k_freq<N_RT_FREQ_BINS;k_freq++) {assign_add(&(CellP[i].Interpolated_Opacity[k_freq]),(out->Interpolated_Opacity[k_freq]),(mode));}}
     if((1 << P[i].Type) & (GRAIN_PTYPES)) {for(k=0;k<3;k++) {P[i].GravAccel[k] += out->Interpolated_Radiation_Acceleration[k]/All.cf_a2inv;}} /* this simply adds to the 'gravitational' acceleration for kicks */ // currently incompatible with hermite integrator -- need to update to Other_Accel
 }
 
@@ -510,7 +510,7 @@ int interpolate_fluxes_opacities_gasgrains_evaluate(int target, int mode, int *e
                         }
                     } else { /* sitting on a -grain- element, want to interpolate flux to it and calculate radiation pressure force */
                         wt = CellP[j].Density*All.cf_a3inv * wk_i; /* weight of element to 'i, with appropriate coefficient from above */
-                        double radacc[3]={0},vel_i[3]={0},dtEgamma_work_done=0; for(k=0;k<3;k++) {vel_i[k]=RSOL_CORRECTION_FACTOR_FOR_VELOCITY_TERMS(j)*local.Vel[k]/All.cf_atime;} /* velocity of interest here is the grain velocity (radiation in lab frame) */
+                        double radacc[3]={0},vel_i[3]={0},dtEgamma_work_done=0; for(k=0;k<3;k++) {vel_i[k]=rsol_correction_factor_for_velocity_terms(j)*local.Vel[k]/All.cf_atime;} /* velocity of interest here is the grain velocity (radiation in lab frame) */
                         for(k_freq=0;k_freq<N_RT_FREQ_BINS;k_freq++)
                         {
                             double f_kappa_abs=0.5,vdot_h[3]={0},flux_i[3]={0},flux_mag=0,erad_i=0,flux_corr=1;
@@ -524,10 +524,10 @@ int interpolate_fluxes_opacities_gasgrains_evaluate(int target, int mode, int *e
                             erad_i = CellP[j].Rad_E_gamma_Pred[k_freq];
                             for(k=0;k<3;k++) {flux_i[k] = -CellP[j].Gradients.Rad_E_gamma_ET[k_freq][k]; flux_mag+=flux_i[k]*flux_i[k];}
                             if(flux_mag>0) {for(k=0;k<3;k++) {flux_i[k]/=sqrt(flux_mag);}} else {flux_i[0]=0;flux_i[1]=0;flux_i[2]=1;}
-                            flux_mag = erad_i*C_LIGHT_CODE_REDUCED(j); for(k=0;k<3;k++) {flux_i[k]*=flux_mag;}
+                            flux_mag = erad_i*c_light_code_reduced(j); for(k=0;k<3;k++) {flux_i[k]*=flux_mag;}
 #endif
                             if(!isfinite(flux_mag) || flux_mag<=MIN_REAL_NUMBER) {flux_mag=MIN_REAL_NUMBER; flux_i[0]=flux_i[1]=0; flux_i[2]=flux_mag;}
-                            double flux_thin = erad_i * C_LIGHT_CODE_REDUCED(j); if(!isfinite(flux_thin) || flux_thin<=0) {flux_thin=0;}
+                            double flux_thin = erad_i * c_light_code_reduced(j); if(!isfinite(flux_thin) || flux_thin<=0) {flux_thin=0;}
                             flux_corr = DMIN(1., 100.*flux_thin/flux_mag);
                             for(k=0;k<3;k++)
                             {
