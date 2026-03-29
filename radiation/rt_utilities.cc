@@ -1459,6 +1459,64 @@ double dust_dEdt(int i, double T, double Tdust, double dust_absorption_rate, dou
     return LambdaDust_fac * (T-Tdust) + fac_abs*dust_absorption_rate - dust_emission;
 }
 
+/* Returns dust_dEdt along with its first and second derivatives with respect to
+   Tdust, for use with Halley's method. The emission term d/dTd(eps*kappa*Td^4)
+   is differentiated exactly using the log-log slope of the opacity table.
+   The gas-dust coupling and absorption scaling terms are treated as constant
+   in Tdust (valid away from the sublimation temperature ~1500K). */
+HalleyFuncResult dust_dEdt_with_derivs(int i, double T, double Tdust, double dust_absorption_rate, double fdustmet_init)
+{
+    double nHcgs = HYDROGEN_MASSFRAC * UNIT_DENSITY_IN_CGS * CellP[i].Density * All.cf_a3inv / PROTONMASS_CGS;
+    double fac_emission = 4.*5.67e-5/(UNIT_PRESSURE_IN_CGS*UNIT_VEL_IN_CGS)*CellP[i].Density*All.cf_a3inv;
+    double LambdaDust_fac = 0;
+#ifdef COOLING
+    if(T>0) {LambdaDust_fac = gas_dust_heating_coeff(i,T,Tdust) * nHcgs * nHcgs /(UNIT_PRESSURE_IN_CGS/UNIT_TIME_IN_CGS);}
+#endif
+    /* Get opacity and its log-log slope for exact emission derivative */
+    double kappa_emission = rt_kappa_adaptive_IR_band(i, Tdust, Tdust, 1, 1);
+    double beta = 0; /* d(log kappa)/d(log T) — will be set from table if available */
+    { /* Extract slope from the dust Planck-mean opacity table */
+        DustOpacityWithSlope ows = dust_planck_mean_opacity_and_slope(Tdust, Tdust);
+        if(ows.kappa > MIN_REAL_NUMBER) { beta = ows.beta; }
+    }
+
+    double Td2 = Tdust * Tdust, Td3 = Td2 * Tdust, Td4 = Td2 * Td2;
+    double dust_emission = fac_emission * kappa_emission * Td4;
+#if defined(COOLING) && !defined(RT_INFRARED)
+    double column = evaluate_NH_from_GradRho(CellP[i].Gradients.Density,P[i].KernelRadius,CellP[i].Density,P[i].NumNgb,1,i);
+    double tau = column * kappa_emission;
+    double tau_suppression = 1.0 / (1 + tau*tau);
+    dust_emission *= tau_suppression;
+    /* For the derivative, the tau suppression also depends on Tdust through kappa.
+       d/dTd[E/(1+tau^2)] = E'/(1+tau^2) - E*2*tau*tau'/(1+tau^2)^2
+       where tau' = column * kappa * beta / Tdust. For simplicity we treat tau as
+       slowly varying (valid when tau is not near 1). */
+#endif
+    double fac_abs = 1.;
+    if(fdustmet_init > 0.) {fac_abs = return_dust_to_metals_ratio_vs_solar(i,Tdust) / fdustmet_init;}
+
+    /* f = LambdaDust_fac * (T - Tdust) + fac_abs * A - dust_emission */
+    double f = LambdaDust_fac * (T - Tdust) + fac_abs * dust_absorption_rate - dust_emission;
+
+    /* df/dTdust: coupling is linear (-LambdaDust_fac), emission uses exact slope
+       d/dTd(eps*kappa*Td^4) = eps*kappa*Td^3*(4 + beta) */
+    double d_emission = fac_emission * kappa_emission * Td3 * (4.0 + beta);
+#if defined(COOLING) && !defined(RT_INFRARED)
+    d_emission *= tau_suppression;
+#endif
+    double df = -LambdaDust_fac - d_emission;
+
+    /* d2f/dTdust^2: from emission only
+       d2/dTd2(eps*kappa*Td^4) = eps*kappa*Td^2*(12 + 7*beta + beta^2) */
+    double d2_emission = fac_emission * kappa_emission * Td2 * (12.0 + 7.0*beta + beta*beta);
+#if defined(COOLING) && !defined(RT_INFRARED)
+    d2_emission *= tau_suppression;
+#endif
+    double d2f = -d2_emission;
+
+    return {f, df, d2f};
+}
+
 #ifdef COOLING
 /***********************************************************************************************************
 Returns the equilibrium dust temperature as a function of gas temperature and dust absorption rate.
@@ -1526,29 +1584,19 @@ double rt_eqm_dust_temp(int i, double T, double dust_absorption_rate)
     if(T_upper==Tmax && dEdt_upper > 0) {return Tmax;}
     if(T_lower>=Tmax) {return Tmax;}
 
-    auto dust_dEdt_func = [&](double Td) -> double {
-        return dust_dEdt(i, T, Td, dust_absorption_rate, fdustmet_init);
-    };
-
-#if (0) && !defined(SINGLE_STAR_AND_SSP_NUCLEAR_ZOOM_SPECIALBOUNDARIES)  // PFH: still testing which option is better, but the new rootfind struggles here, in hyper-zoom-in runs when given dust close to max temperature (raising max temp resolves the failure to converge or Nan's but then jumps to very high solutions somewhat randomly, where it shouldnt. The old secant routine below appears stable and more robust in this particular instance for now.
-    if(dEdt!=0)
+    /* Use Halley's method with exact analytical derivatives from the opacity table slope.
+       Cubic convergence typically reaches the root in 2-3 iterations from the bracketing guess.
+       Falls back to secant+bisection if Halley doesn't converge (e.g. near dust sublimation). */
     {
-        auto result = brent_root([&](double dTdust) { return dust_dEdt_func(T+dTdust); },
-                                 T_lower-T, T_upper-T, dEdt_lower, dEdt_upper, 1e-6, 0.);
-        Tdust = result.root + T;
-        if(result.iterations > MAXITER || isnan(Tdust)){PRINT_WARNING("WARNING: Particle %lld did not converge to desired Tdust tolerance (iter=%d, Tdust=%g, Tgas=%g)\n",(long long)P[i].ID,result.iterations,Tdust,T);}
-    }
-#else
-
-    { // secant method iterations with bisection as a backup; usually converges to machine epsilon in 4-5 iterations
-        auto result = secant_root(dust_dEdt_func, Tdust, Tdust_guess, dEdt, dEdt_guess, T_lower, T_upper, 1.e-3);
+        auto halley_func = [&](double Td) -> HalleyFuncResult {
+            return dust_dEdt_with_derivs(i, T, Td, dust_absorption_rate, fdustmet_init);
+        };
+        auto result = halley_root(halley_func, Tdust, T_lower, T_upper, 1.e-3);
         Tdust = result.root;
         if(result.iterations > MAXITER-10) {
-            PRINT_WARNING("Warning: Dust temperature iteration converging slowly: ID=%lld iter=%d T=%g Tdust=%g Tdust_guess=%g T_upper=%g T_lower=%g.\n",(long long)P[i].ID,result.iterations,T,Tdust,Tdust_guess, T_upper, T_lower);
+            PRINT_WARNING("Warning: Dust temperature Halley iteration converging slowly: ID=%lld iter=%d T=%g Tdust=%g Tdust_guess=%g T_upper=%g T_lower=%g.\n",(long long)P[i].ID,result.iterations,T,Tdust,Tdust_guess, T_upper, T_lower);
         }
     }
-
-#endif
     
     return Tdust;
 }

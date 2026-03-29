@@ -85,9 +85,45 @@ MyFloat dust_planck_mean_opacity(MyFloat Trad, MyFloat Tdust) {
     }
 
     MyFloat dlogT = logTrad_table[1] - logTrad_table[0];
-    int Trad_idx = (int)(N_TRAD - 1) * logT / (logTmax - logTmin);
+    int Trad_idx = (int)((N_TRAD - 1) * logT / (logTmax - logTmin));
     MyFloat wt1 = 1 - (logT - logTrad_table[Trad_idx]) / dlogT, wt2 = 1 - wt1;
     MyFloat log_kappa = wt1 * log_kappadust_table[Tdust_idx][Trad_idx] +
                         wt2 * log_kappadust_table[Tdust_idx][Trad_idx + 1];
     return pow(10., log_kappa);
+}
+
+/* Returns the Planck-mean dust opacity and the local log-log slope d(log kappa)/d(log Trad).
+   The slope beta allows exact differentiation of the piecewise power-law interpolant:
+     kappa = C * Trad^beta  within each table segment
+     d(kappa)/dTrad = kappa * beta / Trad
+   This costs essentially nothing on top of the standard table lookup. */
+struct DustOpacityWithSlope { MyFloat kappa; MyFloat beta; };
+
+DustOpacityWithSlope dust_planck_mean_opacity_and_slope(MyFloat Trad, MyFloat Tdust) {
+    MyFloat logTmax = logTrad_table[N_TRAD - 1], logTmin = logTrad_table[0];
+    MyFloat logT = log10(Trad);
+
+    int Tdust_idx;
+    for (Tdust_idx = 0; Tdust_idx < N_TDUST + 1; Tdust_idx++) {
+        if (Tdust < Tdust_zones[Tdust_idx]) { break; }
+    }
+    if (Tdust_idx == N_TDUST + 1) {
+        return {MIN_REAL_NUMBER, 0.0};
+    }
+
+    if (logT >= logTmax) {
+        return {(MyFloat)pow(10., log_kappadust_table[Tdust_idx][N_TRAD - 1]), 0.0};
+    }
+    if (logT <= logTmin) {
+        return {(MyFloat)pow(10., log_kappadust_table[Tdust_idx][0]), 0.0};
+    }
+
+    MyFloat dlogT = logTrad_table[1] - logTrad_table[0];
+    int Trad_idx = (int)((N_TRAD - 1) * logT / (logTmax - logTmin));
+    MyFloat wt1 = 1 - (logT - logTrad_table[Trad_idx]) / dlogT, wt2 = 1 - wt1;
+    MyFloat log_kappa_lo = log_kappadust_table[Tdust_idx][Trad_idx];
+    MyFloat log_kappa_hi = log_kappadust_table[Tdust_idx][Trad_idx + 1];
+    MyFloat log_kappa = wt1 * log_kappa_lo + wt2 * log_kappa_hi;
+    MyFloat beta = (log_kappa_hi - log_kappa_lo) / dlogT; /* d(log10 kappa)/d(log10 Trad) */
+    return {(MyFloat)pow(10., log_kappa), beta};
 }

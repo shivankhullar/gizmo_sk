@@ -769,6 +769,8 @@ double get_equilibrium_dust_temperature_estimate(int i, double shielding_factor_
 double gas_dust_heating_coeff(int i, double T, double Tdust);
 double rt_eqm_dust_temp(int i, double T, double dust_absorption_rate);
 double dust_dEdt(int i, double T, double Tdust, double dust_absorption_rate, double fdustmet_init);
+struct HalleyFuncResult; /* defined in system/rootfind.h */
+HalleyFuncResult dust_dEdt_with_derivs(int i, double T, double Tdust, double dust_absorption_rate, double fdustmet_init);
 double return_electron_fraction_from_heavy_ions(int target, double temperature, double density_cgs, double n_elec_HHe);
 MyFloat return_electron_fraction_from_Cplus(int target, MyFloat temp, MyFloat x_elec, MyFloat shieldfac);
 MyFloat return_electron_fraction_from_Oplus(int target, MyFloat nHp);
@@ -885,6 +887,8 @@ void rt_update_driftkick(int i, double dt_entr, int mode);
 void rt_source_injection(void);
 #endif
 MyFloat dust_planck_mean_opacity(MyFloat Trad, MyFloat Tdust);
+struct DustOpacityWithSlope { MyFloat kappa; MyFloat beta; };
+DustOpacityWithSlope dust_planck_mean_opacity_and_slope(MyFloat Trad, MyFloat Tdust);
 
 #ifdef RADTRANSFER
 void rt_set_simple_inits(int RestartFlag);
