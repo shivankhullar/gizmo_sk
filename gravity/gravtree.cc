@@ -34,8 +34,8 @@
  * Mike Grudic has also made major revisions to code the Hermitian calculations and binary timestepping.
  */
 
-double Ewaldcount, Costtotal;
-long long N_nodesinlist;
+std::atomic<double> Ewaldcount, Costtotal;
+std::atomic<long long> N_nodesinlist;
 int Ewald_iter;			/* global in file scope, for simplicity */
 void sum_top_level_node_costfactors(void);
 
@@ -636,10 +636,10 @@ void gravity_tree(void)
     MPI_Reduce(&timetree2, &maxt2, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
     MPI_Reduce(&timewait, &sumwaitall, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
     MPI_Reduce(&timecomm, &sumcommall, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
-    MPI_Reduce(&Costtotal, &sum_costtotal, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
-    MPI_Reduce(&Ewaldcount, &ewaldtot, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+    {double Costtotal_local = Costtotal.load(); MPI_Reduce(&Costtotal_local, &sum_costtotal, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);}
+    {double Ewaldcount_local = Ewaldcount.load(); MPI_Reduce(&Ewaldcount_local, &ewaldtot, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);}
     sumup_longs(1, &n_exported, &n_exported);
-    sumup_longs(1, &N_nodesinlist, &N_nodesinlist);
+    {long long N_nodesinlist_local = N_nodesinlist.load(); sumup_longs(1, &N_nodesinlist_local, &N_nodesinlist_local); N_nodesinlist.store(N_nodesinlist_local);}
     All.TotNumOfForces += GlobNumForceUpdate;
     plb = (NumPart / ((double) All.TotNumPart)) * NTask;
     MPI_Reduce(&plb, &plb_max, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
@@ -684,20 +684,20 @@ void *gravity_primary_loop(void *p)
 #ifndef GRAVITY_PRIMARY_LOOP_BATCH_SIZE
 #define GRAVITY_PRIMARY_LOOP_BATCH_SIZE 8
 #endif
+    {int list_size = (int)ActiveParticleList.size();
     while(1)
     {
         int batch[GRAVITY_PRIMARY_LOOP_BATCH_SIZE], batch_count = 0;
-#ifdef _OPENMP
-#pragma omp critical(_nextlistgravprim_)
-#endif
+        int start = NextParticle.fetch_add(GRAVITY_PRIMARY_LOOP_BATCH_SIZE);
+        if(start >= list_size || BufferFullFlag.load()) {break;}
+        int end = start + GRAVITY_PRIMARY_LOOP_BATCH_SIZE;
+        if(end > list_size) {end = list_size;}
+        for(int pos = start; pos < end; pos++)
         {
-            while(batch_count < GRAVITY_PRIMARY_LOOP_BATCH_SIZE && BufferFullFlag == 0 && NextParticle < (int)ActiveParticleList.size())
-            {
-                int idx = ActiveParticleList[NextParticle]; NextParticle++;
-                if(!ProcessedFlag[idx]) {batch[batch_count++] = idx;}
-            }
+            int idx = ActiveParticleList[pos];
+            if(!ProcessedFlag[idx]) {batch[batch_count++] = idx;}
         }
-        if(batch_count == 0) {break;}
+        if(batch_count == 0) {continue;}
         int buffer_full = 0;
         for(int b = 0; b < batch_count; b++)
         {
@@ -714,10 +714,7 @@ void *gravity_primary_loop(void *p)
             {
                 ret = force_treeevaluate_ewald_correction(i, 0, exportflag, exportnodecount, exportindex);
                 if(ret >= 0) {
-#ifdef _OPENMP
-#pragma omp atomic
-#endif
-                    Ewaldcount += ret;
+                    Ewaldcount.fetch_add(ret);
                 } else {buffer_full = 1; break;}
             }
             else
@@ -725,15 +722,12 @@ void *gravity_primary_loop(void *p)
             {
                 ret = force_treeevaluate(i, 0, exportflag, exportnodecount, exportindex);
                 if(ret < 0) {buffer_full = 1; break;}
-#ifdef _OPENMP
-#pragma omp atomic
-#endif
-                Costtotal += ret;
+                Costtotal.fetch_add(ret);
             }
             ProcessedFlag[i] = 1;
         }
         if(buffer_full) {break;}
-    } // while loop
+    }} // while loop
     return NULL;
 }
 
@@ -746,17 +740,12 @@ void *gravity_secondary_loop(void *p)
 #endif
     while(1)
     {
+        int jstart = NextJ.fetch_add(GRAVITY_SECONDARY_LOOP_BATCH_SIZE);
+        if(jstart >= Nimport) {break;}
         int batch[GRAVITY_SECONDARY_LOOP_BATCH_SIZE], batch_count = 0;
-#ifdef _OPENMP
-#pragma omp critical(_nextlistgravsec_)
-#endif
-        {
-            while(batch_count < GRAVITY_SECONDARY_LOOP_BATCH_SIZE && NextJ < Nimport)
-            {
-                batch[batch_count++] = NextJ; NextJ++;
-            }
-        }
-        if(batch_count == 0) {break;}
+        int jend = jstart + GRAVITY_SECONDARY_LOOP_BATCH_SIZE;
+        if(jend > Nimport) {jend = (int)Nimport;}
+        for(int pos = jstart; pos < jend; pos++) {batch[batch_count++] = pos;}
         for(int b = 0; b < batch_count; b++)
         {
             j = batch[b];
@@ -764,23 +753,14 @@ void *gravity_secondary_loop(void *p)
             if(Ewald_iter)
             {
                 int cost = force_treeevaluate_ewald_correction(j, 1, &dummy, &dummy, &dummy);
-#ifdef _OPENMP
-#pragma omp atomic
-#endif
-                Ewaldcount += cost;
+                Ewaldcount.fetch_add(cost);
             }
             else
 #endif
             {
                 ret = force_treeevaluate(j, 1, &nodesinlist, &dummy, &dummy);
-#ifdef _OPENMP
-#pragma omp atomic
-#endif
-                N_nodesinlist += nodesinlist;
-#ifdef _OPENMP
-#pragma omp atomic
-#endif
-                Costtotal += ret;
+                N_nodesinlist.fetch_add(nodesinlist);
+                Costtotal.fetch_add(ret);
             }
         }
     }

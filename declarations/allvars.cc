@@ -202,7 +202,8 @@ int *DomainCount;
 int *DomainCountGas;
 int *DomainTask;
 int *DomainNodeIndex;
-int *DomainList, DomainNumChanged;
+int *DomainList;
+std::atomic<int> DomainNumChanged;
 peanokey *Key, *KeySorted;
 struct topnode_data *TopNodes;
 int NTopnodes, NTopleaves;
@@ -361,10 +362,10 @@ struct sink_temp_particle_data *SinkTempInfo; /*! declare this structure, we'll 
  */
 
 long Nexport, Nimport;
-int BufferCollisionFlag;
-int BufferFullFlag;
-int NextParticle;
-int NextJ;
+std::atomic<int> BufferCollisionFlag;
+std::atomic<int> BufferFullFlag;
+std::atomic<int> NextParticle;
+std::atomic<int> NextJ;
 int TimerFlag;
 
 struct NODE *Nodes_base,	/*!< points to the actual memory allocated for the nodes */

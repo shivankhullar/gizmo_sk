@@ -1,4 +1,4 @@
-/* This is a generic code block designed for simple neighbor loops, so that they don't have to 
+/* This is a generic code block designed for simple neighbor loops, so that they don't have to
     be copy-pasted and can be generically optimized in a single place. specifically this is for
     the secondary loop of particles on a remote processor (after the primary has been passed)
 
@@ -14,17 +14,10 @@ ngblist = Ngblist.data() + thread_id * NumPart;
 #endif
 while(1)
 {
-    int jstart, jend;
-#ifdef _OPENMP
-#pragma omp critical(_nextlistsecblox_)
-#endif
-    {
-        jstart = NextJ;
-        jend = NextJ + SECONDARY_LOOP_BATCH_SIZE;
-        if(jend > Nimport) {jend = Nimport;}
-        NextJ = jend;
-    }
+    int jstart = NextJ.fetch_add(SECONDARY_LOOP_BATCH_SIZE);
     if(jstart >= Nimport) {break;}
+    int jend = jstart + SECONDARY_LOOP_BATCH_SIZE;
+    if(jend > Nimport) {jend = Nimport;}
     for(j = jstart; j < jend; j++)
     {
         EVALUATION_CALL

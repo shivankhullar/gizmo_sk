@@ -116,17 +116,14 @@ void force_kick_node(int i, Vec3<MyDouble>& dp)
       }
 #endif
       atomic_max_double(&Extnodes[no].vmax, vmax);
-      Nodes[no].u.d.bitflags |= (1 << BITFLAG_NODEHASBEENKICKED);
+      __atomic_fetch_or(&Nodes[no].u.d.bitflags, (1 << BITFLAG_NODEHASBEENKICKED), __ATOMIC_RELAXED);
       Extnodes[no].Ti_lastkicked = All.Ti_Current;
       if(Nodes[no].u.d.bitflags & (1 << BITFLAG_TOPLEVEL))
       {
-          #pragma omp critical(DomainListAppend)
-          {
-              if(Extnodes[no].Flag != GlobFlag)
-              {
-                  Extnodes[no].Flag = GlobFlag;
-                  DomainList[DomainNumChanged++] = no;
-              }
+          int old_flag = __atomic_exchange_n(&Extnodes[no].Flag, GlobFlag, __ATOMIC_RELAXED);
+          if(old_flag != GlobFlag) {
+              int slot = DomainNumChanged.fetch_add(1);
+              DomainList[slot] = no;
           }
           break;
       }
@@ -176,6 +173,8 @@ void force_finish_kick_nodes(void)
 #endif
   MyFloat *domainVmax_loc, *domainVmax_all;
 
+  int numChanged = DomainNumChanged.load(); /* snapshot after parallel section */
+
   /* share the momentum-data of the pseudo-particles accross CPUs */
 
   counts = (int *) mymalloc("counts", sizeof(int) * NTask);
@@ -184,16 +183,16 @@ void force_finish_kick_nodes(void)
   offset_dp = (int *) mymalloc("offset_dp", sizeof(int) * NTask);
   offset_vmax = (int *) mymalloc("offset_vmax", sizeof(int) * NTask);
 
-  domainDp_loc = (MyDouble *) mymalloc("domainDp_loc", DomainNumChanged * 3 * sizeof(MyDouble));
+  domainDp_loc = (MyDouble *) mymalloc("domainDp_loc", numChanged * 3 * sizeof(MyDouble));
 #ifdef RT_SEPARATELY_TRACK_LUMPOS
-    domainDp_stellarlum_loc = (MyDouble *) mymalloc("domainDp_stellarlum_loc", DomainNumChanged * 3 * sizeof(MyDouble));
+    domainDp_stellarlum_loc = (MyDouble *) mymalloc("domainDp_stellarlum_loc", numChanged * 3 * sizeof(MyDouble));
 #endif
 #ifdef DM_SCALARFIELD_SCREENING
-  domainDp_dm_loc = (MyDouble *) mymalloc("domainDp_dm_loc", DomainNumChanged * 3 * sizeof(MyDouble));
+  domainDp_dm_loc = (MyDouble *) mymalloc("domainDp_dm_loc", numChanged * 3 * sizeof(MyDouble));
 #endif
-  domainVmax_loc = (MyFloat *) mymalloc("domainVmax_loc", DomainNumChanged * sizeof(MyFloat));
+  domainVmax_loc = (MyFloat *) mymalloc("domainVmax_loc", numChanged * sizeof(MyFloat));
 
-  for(i = 0; i < DomainNumChanged; i++)
+  for(i = 0; i < numChanged; i++)
     {
       for(j = 0; j < 3; j++)
 	{
@@ -208,7 +207,7 @@ void force_finish_kick_nodes(void)
       domainVmax_loc[i] = Extnodes[DomainList[i]].vmax;
     }
 
-  MPI_Allgather(&DomainNumChanged, 1, MPI_INT, counts, 1, MPI_INT, MPI_COMM_WORLD);
+  MPI_Allgather(&numChanged, 1, MPI_INT, counts, 1, MPI_INT, MPI_COMM_WORLD);
 
   for(ta = 0, totDomainNumChanged = 0, offset_list[0] = 0, offset_dp[0] = 0, offset_vmax[0] = 0; ta < NTask;
       ta++)
@@ -235,7 +234,7 @@ void force_finish_kick_nodes(void)
 
   domainList_all = (int *) mymalloc("domainList_all", totDomainNumChanged * sizeof(int));
 
-  MPI_Allgatherv(DomainList, DomainNumChanged, MPI_INT,
+  MPI_Allgatherv(DomainList, numChanged, MPI_INT,
 		 domainList_all, counts, offset_list, MPI_INT, MPI_COMM_WORLD);
 
   for(ta = 0; ta < NTask; ta++)
@@ -245,19 +244,19 @@ void force_finish_kick_nodes(void)
     }
 
 
-  MPI_Allgatherv(domainDp_loc, DomainNumChanged * 3 * sizeof(MyDouble), MPI_BYTE,
+  MPI_Allgatherv(domainDp_loc, numChanged * 3 * sizeof(MyDouble), MPI_BYTE,
 		 domainDp_all, counts_dp, offset_dp, MPI_BYTE, MPI_COMM_WORLD);
 
 #ifdef RT_SEPARATELY_TRACK_LUMPOS
-    MPI_Allgatherv(domainDp_stellarlum_loc, DomainNumChanged * 3 * sizeof(MyDouble), MPI_BYTE,
+    MPI_Allgatherv(domainDp_stellarlum_loc, numChanged * 3 * sizeof(MyDouble), MPI_BYTE,
                    domainDp_stellarlum_all, counts_dp, offset_dp, MPI_BYTE, MPI_COMM_WORLD);
 #endif
 #ifdef DM_SCALARFIELD_SCREENING
-  MPI_Allgatherv(domainDp_dm_loc, DomainNumChanged * 3 * sizeof(MyDouble), MPI_BYTE,
+  MPI_Allgatherv(domainDp_dm_loc, numChanged * 3 * sizeof(MyDouble), MPI_BYTE,
 		 domainDp_dm_all, counts_dp, offset_dp, MPI_BYTE, MPI_COMM_WORLD);
 #endif
 
-  MPI_Allgatherv(domainVmax_loc, DomainNumChanged * sizeof(MyFloat), MPI_BYTE,
+  MPI_Allgatherv(domainVmax_loc, numChanged * sizeof(MyFloat), MPI_BYTE,
 		 domainVmax_all, counts, offset_vmax, MPI_BYTE, MPI_COMM_WORLD);
 
 
@@ -455,13 +454,10 @@ void force_update_hmax(void)
 
                 if(Nodes[no].u.d.bitflags & (1 << BITFLAG_TOPLEVEL))
                 {
-                    #pragma omp critical(DomainListAppendHmax)
-                    {
-                        if(Extnodes[no].Flag != GlobFlag)
-                        {
-                            Extnodes[no].Flag = GlobFlag;
-                            DomainList[DomainNumChanged++] = no;
-                        }
+                    int old_flag = __atomic_exchange_n(&Extnodes[no].Flag, GlobFlag, __ATOMIC_RELAXED);
+                    if(old_flag != GlobFlag) {
+                        int slot = DomainNumChanged.fetch_add(1);
+                        DomainList[slot] = no;
                     }
                     break;
                 }
@@ -519,20 +515,22 @@ void force_update_hmax(void)
 
   /* share the hmax-data of the pseudo-particles accross CPUs */
 
+  int numChanged = DomainNumChanged.load(); /* snapshot after parallel section */
+
   counts = (int *) mymalloc("counts", sizeof(int) * NTask);
   offset_list = (int *) mymalloc("offset_list", sizeof(int) * NTask);
   offset_hmax = (int *) mymalloc("offset_hmax", sizeof(int) * NTask);
 
-  domainHmax_loc = (MyFloat *) mymalloc("domainHmax_loc", DomainNumChanged * OffsetSIZE * sizeof(MyFloat));
+  domainHmax_loc = (MyFloat *) mymalloc("domainHmax_loc", numChanged * OffsetSIZE * sizeof(MyFloat));
 
-  for(i = 0; i < DomainNumChanged; i++)
+  for(i = 0; i < numChanged; i++)
     {
       domainHmax_loc[OffsetSIZE * i] = Extnodes[DomainList[i]].hmax;
       domainHmax_loc[OffsetSIZE * i + 1] = Extnodes[DomainList[i]].divVmax;
     }
 
 
-  MPI_Allgather(&DomainNumChanged, 1, MPI_INT, counts, 1, MPI_INT, MPI_COMM_WORLD);
+  MPI_Allgather(&numChanged, 1, MPI_INT, counts, 1, MPI_INT, MPI_COMM_WORLD);
 
   for(ta = 0, totDomainNumChanged = 0, offset_list[0] = 0, offset_hmax[0] = 0; ta < NTask; ta++)
     {
@@ -548,13 +546,13 @@ void force_update_hmax(void)
   domainHmax_all = (MyFloat *) mymalloc("domainHmax_all", totDomainNumChanged * OffsetSIZE * sizeof(MyFloat));
   domainList_all = (int *) mymalloc("domainList_all", totDomainNumChanged * sizeof(int));
 
-  MPI_Allgatherv(DomainList, DomainNumChanged, MPI_INT,
+  MPI_Allgatherv(DomainList, numChanged, MPI_INT,
 		 domainList_all, counts, offset_list, MPI_INT, MPI_COMM_WORLD);
 
   for(ta = 0; ta < NTask; ta++)
     {counts[ta] *= OffsetSIZE * sizeof(MyFloat);}
 
-  MPI_Allgatherv(domainHmax_loc, OffsetSIZE * DomainNumChanged * sizeof(MyFloat), MPI_BYTE,
+  MPI_Allgatherv(domainHmax_loc, OffsetSIZE * numChanged * sizeof(MyFloat), MPI_BYTE,
 		 domainHmax_all, counts, offset_hmax, MPI_BYTE, MPI_COMM_WORLD);
 
 

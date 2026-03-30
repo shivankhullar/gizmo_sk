@@ -26,32 +26,33 @@ if(BufferCollisionFlag && thread_id) {return NULL;} /* force to serial for this 
 #ifndef PRIMARY_LOOP_BATCH_SIZE
 #define PRIMARY_LOOP_BATCH_SIZE 8
 #endif
-while(1)
 {
-    int batch[PRIMARY_LOOP_BATCH_SIZE], batch_count = 0;
-#ifdef _OPENMP
-#pragma omp critical(_nextlistprimblox_)
-#endif
+    int list_size = (int)ActiveParticleList.size();
+    while(1)
     {
-        while(batch_count < PRIMARY_LOOP_BATCH_SIZE && BufferFullFlag == 0 && NextParticle < (int)ActiveParticleList.size())
+        int batch[PRIMARY_LOOP_BATCH_SIZE], batch_count = 0;
+        int start = NextParticle.fetch_add(PRIMARY_LOOP_BATCH_SIZE);
+        if(start >= list_size || BufferFullFlag.load()) {break;}
+        int end = start + PRIMARY_LOOP_BATCH_SIZE;
+        if(end > list_size) {end = list_size;}
+        for(int pos = start; pos < end; pos++)
         {
-            int idx = ActiveParticleList[NextParticle];
-            NextParticle++;
+            int idx = ActiveParticleList[pos];
             if(!ProcessedFlag[idx]) {batch[batch_count++] = idx;}
         }
-    }
-    if(batch_count == 0) {break;}
-    int buffer_full = 0;
-    for(int b = 0; b < batch_count; b++)
-    {
-        i = batch[b];
-        CONDITION_FOR_EVALUATION
+        if(batch_count == 0) {continue;}
+        int buffer_full = 0;
+        for(int b = 0; b < batch_count; b++)
         {
-            if(EVALUATION_CALL < 0) {buffer_full = 1; break;} // export buffer has filled up //
+            i = batch[b];
+            CONDITION_FOR_EVALUATION
+            {
+                if(EVALUATION_CALL < 0) {buffer_full = 1; break;} // export buffer has filled up //
+            }
+            ProcessedFlag[i] = 1; /* particle successfully finished */
         }
-        ProcessedFlag[i] = 1; /* particle successfully finished */
+        if(buffer_full) {break;}
     }
-    if(buffer_full) {break;}
 }
 /* loop completed successfully */
 return NULL;

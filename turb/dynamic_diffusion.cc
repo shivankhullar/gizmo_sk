@@ -910,22 +910,12 @@ void *DynamicDiff_evaluate_primary(void *p, int dynamic_iteration) {
 #ifdef _OPENMP
     if(BufferCollisionFlag && thread_id) {return NULL;} /* force to serial for this subloop if threads simultaneously cross the Nexport bunchsize threshold */
 #endif
+    int list_size = (int)ActiveParticleList.size();
     while (1) {
-        int exitFlag = 0;
-#ifdef _OPENMP
-#pragma omp critical(_nexportdd_)
-#endif
-        {
-            if (BufferFullFlag != 0 || NextParticle >= (int)ActiveParticleList.size()) {
-                exitFlag = 1;
-            }
-            else {
-                i = ActiveParticleList[NextParticle];
-                NextParticle++;
-            }
-        }
-
-        if(exitFlag) break;
+        if(BufferFullFlag.load()) {break;}
+        int pos = NextParticle.fetch_add(1);
+        if(pos >= list_size) {break;}
+        i = ActiveParticleList[pos];
         if(ProcessedFlag[i]) {continue;}
 
         if(P[i].Type == 0) {
@@ -946,14 +936,7 @@ void *DynamicDiff_evaluate_secondary(void *p, int dynamic_iteration) {
     ngblist = Ngblist + thread_id * NumPart;
 
     while (1) {
-#ifdef _OPENMP
-#pragma omp critical(_nextlistdd_)
-#endif
-        {
-            j = NextJ;
-            NextJ++;
-        }
-        
+        j = NextJ.fetch_add(1);
         if (j >= Nimport) break;
 
         DynamicDiff_evaluate(j, 1, &dummy, &dummy, &dummy, ngblist, dynamic_iteration);

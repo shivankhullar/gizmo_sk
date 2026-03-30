@@ -43,6 +43,8 @@
 #include <omp.h>
 #endif
 
+#include <atomic>
+
 #include "../GIZMO_config.h"
 
 #include "precompiler_logic.h"
@@ -229,7 +231,8 @@ extern int *DomainCount;
 extern int *DomainCountGas;
 extern int *DomainTask;
 extern int *DomainNodeIndex;
-extern int *DomainList, DomainNumChanged;
+extern int *DomainList;
+extern std::atomic<int> DomainNumChanged;
 extern peanokey *Key, *KeySorted;
 
 
@@ -358,10 +361,10 @@ extern peanokey *DomainKeyBuf;
 
 /* Tree variables */
 extern long Nexport, Nimport;
-extern int BufferCollisionFlag;
-extern int BufferFullFlag;
-extern int NextParticle;
-extern int NextJ;
+extern std::atomic<int> BufferCollisionFlag;
+extern std::atomic<int> BufferFullFlag;
+extern std::atomic<int> NextParticle;
+extern std::atomic<int> NextJ;
 extern int TimerFlag;
 
 
