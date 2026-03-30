@@ -344,7 +344,7 @@ double return_CRbin_kinetic_energy_in_GeV(int target, int k_CRegy);
 double return_CRbin_gamma_factor(int target, int k_CRegy);
 double gamma_eos_of_crs_in_bin(int k_CRegy);
 double return_CRbin_beta_factor(int target, int k_CRegy);
-double get_cell_Urad_in_eVcm3(int i);
+double get_cell_Urad_in_eVcm3(int i, struct particle_data *pp, struct gas_cell_data *cell);
 void CR_cooling_and_losses(int target, double n_elec, double nHcgs, double dtime_cgs, struct particle_data *pp, struct gas_cell_data *cell);
 double return_CRbin_CRmass_in_mp(int target, int k_CRegy);
 double return_CRbin_CR_rigidity_in_GV(int target, int k_CRegy);
