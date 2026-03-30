@@ -259,7 +259,7 @@ void do_the_cooling_for_particle(int i, struct particle_data *pp, struct gas_cel
 #endif
 
 #if defined(GALSF_ISMDUSTCHEM_MODEL)
-        update_dust_processes(i, dtime*UNIT_TIME_IN_MYR*0.001);
+        update_dust_processes(i, dtime*UNIT_TIME_IN_MYR*0.001, pp, cell);
 #endif
 
 #ifdef COOL_MOLECFRAC_NONEQM
@@ -1191,7 +1191,7 @@ double CoolingRate(double logT,  double rho, double n_elec_guess, double *n_elec
         }
 #endif
 
-        Heat += CR_gas_heating(target, n_elec, nH0, nHcgs); // CR hadronic+Coulomb+ionization heating //
+        Heat += CR_gas_heating(target, n_elec, nH0, nHcgs, pp, cell); // CR hadronic+Coulomb+ionization heating //
 #if defined(COOL_LOW_TEMPERATURES)
         if(LambdaMol<0) {Heat -= LambdaMol;} // Molecular line heating (Trad_mol_cooling_batch > Tgas) //
 #if (GALSF_FB_FIRE_STELLAREVOLUTION > 2) || !defined(GALSF_FB_FIRE_STELLAREVOLUTION)

@@ -42,13 +42,13 @@ void *GasGrad_evaluate_secondary(void *p, int gradient_iteration);
 
 
 /* function that tells us whether a given element should be active for gradient calculation*/
-int GasGrad_isactive(int i)
+int GasGrad_isactive(int i, struct particle_data *pp, struct gas_cell_data *cell)
 {
-    if(P[i].Type != 0) return 0;
-    if(P[i].Mass <= 0) return 0;
-    if(CellP[i].Density <= 0 || P[i].KernelRadius <= 0) return 0;
+    if(pp[i].Type != 0) return 0;
+    if(pp[i].Mass <= 0) return 0;
+    if(cell[i].Density <= 0 || pp[i].KernelRadius <= 0) return 0;
 #if defined(GALSF_SUBGRID_WINDS) && !defined(TURB_DIFF_DYNAMIC)
-    if(CellP[i].DelayTime > 0) return 0;
+    if(cell[i].DelayTime > 0) return 0;
 #endif
     return 1;
 }
@@ -1278,7 +1278,7 @@ void hydro_gradient_calc(void)
 
 #if defined(COSMIC_RAY_FLUID) && !defined(CRFLUID_EVOLVE_SCATTERINGWAVES) /* note that because of the way this depends on the gradient scale-length, we should calculate it -after- the slope-limiters are applied */
             for(k=0;k<N_CR_PARTICLE_BINS;k++) {CellP[i].CosmicRayDiffusionCoeff[k]=0;}
-            if(CellP[i].Density > 0 && P[i].Mass > 0) {CalculateAndAssign_CosmicRay_DiffusionAndStreamingCoefficients(i);}/* only assign diffusivities to 'valid' gas particles */
+            if(CellP[i].Density > 0 && P[i].Mass > 0) {CalculateAndAssign_CosmicRay_DiffusionAndStreamingCoefficients(i, P, CellP);}/* only assign diffusivities to 'valid' gas particles */
 #endif
 
 
@@ -1474,7 +1474,7 @@ int GasGrad_evaluate(int target, int mode, int *exportflag, int *exportnodecount
             for(n = 0; n < numngb; n++)
             {
                 j = ngblist[n]; /* since we use the -threaded- version above of ngb-finding, its super-important this is the lower-case ngblist here! */
-                if(GasGrad_isactive(j)==0) continue;
+                if(GasGrad_isactive(j, P, CellP)==0) continue;
                 swap_to_j = 0;
                 
                 kernel.dp[0] = local.Pos[0] - P[j].Pos[0];
@@ -1993,7 +1993,7 @@ int GasGrad_evaluate(int target, int mode, int *exportflag, int *exportnodecount
 
 void *GasGrad_evaluate_primary(void *p, int gradient_iteration)
 {
-#define CONDITION_FOR_EVALUATION if(GasGrad_isactive(i))
+#define CONDITION_FOR_EVALUATION if(GasGrad_isactive(i, P, CellP))
 #define EVALUATION_CALL GasGrad_evaluate(i,0,exportflag,exportnodecount,exportindex,ngblist,gradient_iteration)
 #include "../system/code_block_primary_loop_evaluation.h"
 #undef CONDITION_FOR_EVALUATION

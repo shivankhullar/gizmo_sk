@@ -318,18 +318,18 @@ double INLINE_FUNC Get_Particle_Expected_Area(double h);
 double get_cell_Bfield_in_microGauss(int i, struct particle_data *pp, struct gas_cell_data *cell);
 double Get_Gas_Ionized_Fraction(int i, struct particle_data *pp, struct gas_cell_data *cell);
 double CR_calculate_adiabatic_gasCR_exchange_term(int i, double dt_entr, double gamma_minus_eCR_tmp, int mode);
-double INLINE_FUNC Get_CosmicRayEnergyDensity_cgs(int i);
-double CR_gas_heating(int target, double n_elec, double nH0, double nHcgs);
+double INLINE_FUNC Get_CosmicRayEnergyDensity_cgs(int i, struct particle_data *pp, struct gas_cell_data *cell);
+double CR_gas_heating(int target, double n_elec, double nH0, double nHcgs, struct particle_data *pp, struct gas_cell_data *cell);
 double Get_CosmicRayIonizationRate_cgs(int i, struct particle_data *pp, struct gas_cell_data *cell);
 #ifdef COSMIC_RAY_FLUID
-void CalculateAndAssign_CosmicRay_DiffusionAndStreamingCoefficients(int i);
+void CalculateAndAssign_CosmicRay_DiffusionAndStreamingCoefficients(int i, struct particle_data *pp, struct gas_cell_data *cell);
 double INLINE_FUNC Get_Gas_CosmicRayPressure(int i, int k_CRegy, struct particle_data *pp, struct gas_cell_data *cell);
-double Get_CosmicRayGradientLength(int i, int k_CRegy);
-double CosmicRay_Update_DriftKick(int i, double dt_entr, int mode);
+double Get_CosmicRayGradientLength(int i, int k_CRegy, struct particle_data *pp, struct gas_cell_data *cell);
+double CosmicRay_Update_DriftKick(int i, double dt_entr, int mode, struct particle_data *pp, struct gas_cell_data *cell);
 double CR_cooling_and_gas_heating(int target, double n_elec, double nH_cgs, double dtime_cgs, int mode);
 double CR_energy_spectrum_injection_fraction(int k_CRegy, int source_type, double shock_vel, int return_index_in_bin, int target);
 double return_cosmic_ray_anisotropic_closure_function_threechi(int target, int k_CRegy);
-void inject_cosmic_rays(double CR_energy_to_inject, double injection_velocity, int source_type, int target, double *dir);
+void inject_cosmic_rays(double CR_energy_to_inject, double injection_velocity, int source_type, int target, double *dir, struct particle_data *pp, struct gas_cell_data *cell);
 double return_CRbin_M1speed(int k_CRegy);
 double evaluate_cr_transport_reductionfactor(int target, int k_CRegy, int mode);
 double Get_AlfvenMachNumber_Local(int i, double vA_idealMHD_codeunits, int use_shear_corrected_vturb_flag);
@@ -390,7 +390,7 @@ double INLINE_FUNC yhelium(int target, struct particle_data *pp, struct gas_cell
 double Get_Gas_Molecular_Mass_Fraction(int i, double temperature, double neutral_fraction, double free_electron_ratio, double urad_from_uvb_in_G0, struct particle_data *pp, struct gas_cell_data *cell);
 double INLINE_FUNC Get_Gas_BField(int i_particle_id, int k_vector_component, struct particle_data *pp, struct gas_cell_data *cell);
 #ifdef MAGNETIC
-double Get_DtB_FaceArea_Limiter(int i);
+double Get_DtB_FaceArea_Limiter(int i, struct particle_data *pp, struct gas_cell_data *cell);
 #ifdef DIVBCLEANING_DEDNER
 double INLINE_FUNC Get_Gas_PhiField(int i_particle_id);
 double INLINE_FUNC Get_Gas_PhiField_DampingTimeInv(int i_particle_id);
@@ -424,7 +424,7 @@ void sink_accretion(void);
 #ifdef SINK_WIND_SPAWN
 void get_random_orthonormal_basis(int seed, double *nx, double *ny, double *nz);
 void get_wind_spawn_direction(int i, int num_spawned_this_call, int mode, double *ny, double *nz, double *veldir, double *dpdir);
-double get_spawned_cell_launch_speed(int i);
+double get_spawned_cell_launch_speed(int i, struct particle_data *pp);
 #ifdef MAGNETIC
 void get_wind_spawn_magnetic_field(int j, int mode, double *ny, double *nz,  double *dpdir, double d_r);
 #endif
@@ -498,7 +498,7 @@ void treat_outflowing_particles(void);
 void set_injection_accel(void);
 
 int density_isactive(int n);
-int GasGrad_isactive(int i);
+int GasGrad_isactive(int i, struct particle_data *pp, struct gas_cell_data *cell);
 
 #ifdef HYDRO_VOLUME_CORRECTIONS
 void cellcorrections_calc(void);
@@ -593,36 +593,36 @@ double get_age_tracer_bin_start_time(int k);
 #if defined(GALSF_ISMDUSTCHEM_MODEL)
 void Initialize_ISMDustChem_Global_Variables();
 void Initialize_ISMDustChem_Particle_Variables(int i);
-void update_dust_processes(int i, double dtime_gyr);
+void update_dust_processes(int i, double dtime_gyr, struct particle_data *pp, struct gas_cell_data *cell);
 void ISMDustChem_get_SNe_dust_yields(double *yields, int i, double t_gyr, int SNeIaFlag, double Msne);
 void ISMDustChem_get_wind_dust_yields(double *yields, int i);
 double specific_Z_AGB_dust(int spec_indx, double star_age, int z_bound);
 double cumulative_AGB_dust_returns(int dust_type, double star_age, double z);
-void update_dense_molecular_fields(int i, double temp, double rho, double nh0, double ne);
-void update_dust_accretion(int i, double dtime_gyr, double temp, double rho);
-void update_dust_sputtering(int i, double dtime_gyr, double temp, double rho);
+void update_dense_molecular_fields(int i, double temp, double rho, double nh0, double ne, struct particle_data *pp, struct gas_cell_data *cell);
+void update_dust_accretion(int i, double dtime_gyr, double temp, double rho, struct particle_data *pp, struct gas_cell_data *cell);
+void update_dust_sputtering(int i, double dtime_gyr, double temp, double rho, struct particle_data *pp, struct gas_cell_data *cell);
 double Lambda_Dust_HighTemperature_Gas_ISM(int target, double T, double n_elec);
 double return_ismdustchem_species_of_interest_for_diffusion_and_yields(int i, int k, double mass);
 double ISMDustChem_Return_Mass_Where_Dust_Shocked(double rho_cell_in_code_units, double Esne51_into_cell, double mass_preshock_in_code_units, double Z_cell);
 void update_ISMDustChem_after_mechanical_injection(int j, double mass_shocked, double m0, double mf, double *Z_injected);
-void ISMDustChem_update_iron_inclusions(int i);
+void ISMDustChem_update_iron_inclusions(int i, struct particle_data *pp, struct gas_cell_data *cell);
 void ISMDustChem_get_elem_yields_from_species_yields(double *dust_yields, double *species_yields);
 void ISMDustChem_get_species_key_elem(int spec_indx, double *dust_metallicity, int *key_elem, double *key_num_atoms, double *key_mass);
 void ISMDustChem_get_species_properties(int spec_indx, double *dust_atomic_weight, double *bulk_dens);
-void ISMDustChemEvo_renormalize_dust_fields(int i);
+void ISMDustChemEvo_renormalize_dust_fields(int i, struct particle_data *pp, struct gas_cell_data *cell);
 void check_dust_fields(int i, int update_process);
 #if defined(GALSF_ISMDUSTCHEM_GRAINSIZEEVO)
 void Initialize_ISMDustChemEvo_Particle_Variables(int i);
-double get_ISMDustChemEvo_bin_mass(int i, int j, int k);
-void update_ISMDustChemEvo_bin_number_and_slope(int i, int j, int k, double number_in_bin, double mass_in_bin);
+double get_ISMDustChemEvo_bin_mass(int i, int j, int k, struct gas_cell_data *cell);
+void update_ISMDustChemEvo_bin_number_and_slope(int i, int j, int k, double number_in_bin, double mass_in_bin, struct gas_cell_data *cell);
 void check_for_slope_limiting(int k, double bulk_dens, double *number_in_bin, double *slope_in_bin, double mass_in_bin);
 void ISMDustChemEvo_get_SNe_dust_grain_size_yields(double *yields, int i, int SNeIaFlag, double Msne);
 void ISMDustChemEvo_get_wind_dust_grain_size_yields(double *yields, double Msne);
-void ISMDustChemEvo_update_bins_given_grain_size_change(int i, int j, double *bin_da, double mass_limit);
-void update_dust_shattering_and_coagulation(int i, double dtime_gyr, double temp, double rho);
-void update_dust_photodestruction(int i, double dtime_gyr);
-double shattering_coagulation_polynomial(int i, int spec_indx, int bin_i, int bin_j);
-void ISMDustChemEvo_update_bins_given_mass_change(int i, int j, double *bin_dM, double bulk_dens);
+void ISMDustChemEvo_update_bins_given_grain_size_change(int i, int j, double *bin_da, double mass_limit, struct gas_cell_data *cell);
+void update_dust_shattering_and_coagulation(int i, double dtime_gyr, double temp, double rho, struct particle_data *pp, struct gas_cell_data *cell);
+void update_dust_photodestruction(int i, double dtime_gyr, struct particle_data *pp, struct gas_cell_data *cell);
+double shattering_coagulation_polynomial(int i, int spec_indx, int bin_i, int bin_j, struct gas_cell_data *cell);
+void ISMDustChemEvo_update_bins_given_mass_change(int i, int j, double *bin_dM, double bulk_dens, struct gas_cell_data *cell);
 void ISMDustChemEvo_get_new_bin_N_and_slope_given_mass_change(double *bin_dM, double *bin_M, double *bin_N, double *bin_slope, double *new_bin_N, double *new_bin_slope, double bulk_dens);
 void ISMDustChem_SNe_sputtering_step(int spec_indx, double *init_bin_N, double *init_bin_slope, double *init_bin_M, double *final_bin_N, double *final_bin_slope, double *final_bin_M, double bulk_dens);
 void ISMDustChem_SNe_shattering_step(int spec_indx, double *init_bin_N, double *init_bin_slope, double *init_bin_M, double *final_bin_N, double *final_bin_slope, double *final_bin_M, double bulk_dens);
