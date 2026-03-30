@@ -540,7 +540,7 @@ void gravity_tree(void)
                 if(!isnan(trace) && (trace>0)) {for(k=0;k<6;k++) {CellP[i].ET[k_freq][k]/=trace;}} else {CellP[i].ET[k_freq][0]=CellP[i].ET[k_freq][1]=CellP[i].ET[k_freq][2]=1./3.; CellP[i].ET[k_freq][3]=CellP[i].ET[k_freq][4]=CellP[i].ET[k_freq][5]=0;}}}
 #endif
 #if defined(RT_USE_GRAVTREE_SAVE_RAD_ENERGY) /* normalize to energy density with C, and multiply by volume to use standard 'finite volume-like' quantity as elsewhere in-code */
-        if(P[i].Type==0) {int kf; for(kf=0;kf<N_RT_FREQ_BINS;kf++) {CellP[i].Rad_E_gamma[kf] *= P[i].Mass/(CellP[i].Density*All.cf_a3inv * c_light_code_reduced(i));}}
+        if(P[i].Type==0) {int kf; for(kf=0;kf<N_RT_FREQ_BINS;kf++) {CellP[i].Rad_E_gamma[kf] *= P[i].Mass/(CellP[i].Density*All.cf_a3inv * c_light_code_reduced(i,P,CellP));}}
 #endif
 #ifdef COSMIC_RAY_SUBGRID_LEBRON
         if(P[i].Type==0) {CellP[i].SubGrid_CosmicRayEnergyDensity *= cr_get_source_shieldfac(i);}
@@ -553,8 +553,8 @@ void gravity_tree(void)
             int k,kfreq; double vol_inv=CellP[i].Density*All.cf_a3inv/P[i].Mass, radacc[3]={0}, h_i=Get_Particle_Size(i)*All.cf_atime, sigma_eff_i=P[i].Mass/(h_i*h_i);
             for(kfreq=0; kfreq<N_RT_FREQ_BINS; kfreq++)
             {
-                double f_slab=1, erad_i=0, vel_i[3]={0}, vdot_h[3]={0}, flux_i[3]={0}, flux_mag2=MIN_REAL_NUMBER, vdotflux=0, kappa_rad=rt_kappa(i,kfreq), tau_eff=kappa_rad*sigma_eff_i; if(tau_eff > 1.e-4) {f_slab = (1.-exp(-tau_eff)) / tau_eff;} // account for optically thick local 'slabs' self-shielding themselves
-                double acc_norm = kappa_rad * f_slab / c_light_code_reduced(i); // pre-factor for radiation pressure acceleration
+                double f_slab=1, erad_i=0, vel_i[3]={0}, vdot_h[3]={0}, flux_i[3]={0}, flux_mag2=MIN_REAL_NUMBER, vdotflux=0, kappa_rad=rt_kappa(i,kfreq,P,CellP), tau_eff=kappa_rad*sigma_eff_i; if(tau_eff > 1.e-4) {f_slab = (1.-exp(-tau_eff)) / tau_eff;} // account for optically thick local 'slabs' self-shielding themselves
+                double acc_norm = kappa_rad * f_slab / c_light_code_reduced(i,P,CellP); // pre-factor for radiation pressure acceleration
 #if defined(RT_LEBRON)
                 acc_norm *= All.PhotonMomentum_Coupled_Fraction; // allow user to arbitrarily increase/decrease strength of RP forces for testing
 #endif
@@ -576,7 +576,7 @@ void gravity_tree(void)
 
 #ifdef RT_USE_TREECOL_FOR_NH  /* compute the effective column density that gives equivalent attenuation of a uniform background: -log(avg(exp(-tau)))/kappa */
         double attenuation=0, minimum_column=MAX_REAL_NUMBER; int kbin;
-        double kappa_photoelectric = 500. * DMAX(1e-4, (P[i].Metallicity[0]/All.SolarAbundances[0])*return_dust_to_metals_ratio_vs_solar(i,0)); // dust opacity in cgs
+        double kappa_photoelectric = 500. * DMAX(1e-4, (P[i].Metallicity[0]/All.SolarAbundances[0])*return_dust_to_metals_ratio_vs_solar(i,0, P, CellP)); // dust opacity in cgs
         for(kbin=0; kbin<RT_USE_TREECOL_FOR_NH; kbin++) {
 	      attenuation += exp(DMAX(-P[i].ColumnDensityBins[kbin] * UNIT_SURFDEN_IN_CGS * kappa_photoelectric,-100));
 	      minimum_column = DMIN(minimum_column,P[i].ColumnDensityBins[kbin]);

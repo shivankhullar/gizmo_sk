@@ -212,7 +212,7 @@ void drift_particle(int i, integertime time1)
             CellP[i].Density *= exp(-divv_fac);
             double etmp = CellP[i].InternalEnergyPred + CellP[i].DtInternalEnergy * dt_entr;
 #if defined(RADTRANSFER) && defined(RT_EVOLVE_ENERGY) /* block here to deal with tricky cases where radiation energy density is -much- larger than thermal */ 
-            int kfreq; double erad_tot=0,tot_e_min=0,enew=0,int_e_min=0,dErad=0,rsol_fac=c_light_code_reduced(i)/C_LIGHT_CODE; for(kfreq=0;kfreq<N_RT_FREQ_BINS;kfreq++) {erad_tot+=CellP[i].Rad_E_gamma_Pred[kfreq];}
+            int kfreq; double erad_tot=0,tot_e_min=0,enew=0,int_e_min=0,dErad=0,rsol_fac=c_light_code_reduced(i,P,CellP)/C_LIGHT_CODE; for(kfreq=0;kfreq<N_RT_FREQ_BINS;kfreq++) {erad_tot+=CellP[i].Rad_E_gamma_Pred[kfreq];}
             if(erad_tot > 0)
             {
                 int_e_min=0.025*CellP[i].InternalEnergyPred; tot_e_min=0.025*(erad_tot/rsol_fac+CellP[i].InternalEnergyPred*P[i].Mass);
@@ -240,7 +240,7 @@ void drift_particle(int i, integertime time1)
 #endif
             drift_extra_physics(i, time0, time1, dt_entr);
 
-            set_eos_pressure(i);
+            set_eos_pressure(i, P, CellP);
         }
     
     /* check for reflecting or outflow or otherwise special boundaries: if so, do the reflection/boundary! */
@@ -289,7 +289,7 @@ void drift_extra_physics(int i, integertime tstart, integertime tend, double dt_
     CosmicRay_Update_DriftKick(i,dt_entr,1);
 #endif
 #ifdef RADTRANSFER
-    rt_update_driftkick(i,dt_entr,1);
+    rt_update_driftkick(i,dt_entr,1,P,CellP);
 #endif
 #ifdef EOS_ELASTIC
     elastic_body_update_driftkick(i,dt_entr,1);
@@ -508,11 +508,11 @@ double INLINE_FUNC Get_Gas_PhiField_DampingTimeInv(int i_particle_id)
         double vsig1 = 0.0;
         if(CellP[i_particle_id].Density > 0)
         {
-            vsig1 = sqrt( Get_Gas_effective_soundspeed_i(i_particle_id)*Get_Gas_effective_soundspeed_i(i_particle_id) +
+            vsig1 = sqrt( Get_Gas_effective_soundspeed_i(i_particle_id, P, CellP)*Get_Gas_effective_soundspeed_i(i_particle_id, P, CellP) +
                  (1. / All.cf_atime) *
-                 (Get_Gas_BField(i_particle_id,0)*Get_Gas_BField(i_particle_id,0) +
-                  Get_Gas_BField(i_particle_id,1)*Get_Gas_BField(i_particle_id,1) +
-                  Get_Gas_BField(i_particle_id,2)*Get_Gas_BField(i_particle_id,2) +
+                 (Get_Gas_BField(i_particle_id,0, P, CellP)*Get_Gas_BField(i_particle_id,0, P, CellP) +
+                  Get_Gas_BField(i_particle_id,1, P, CellP)*Get_Gas_BField(i_particle_id,1, P, CellP) +
+                  Get_Gas_BField(i_particle_id,2, P, CellP)*Get_Gas_BField(i_particle_id,2, P, CellP) +
                   phi_B_eff*phi_B_eff) / CellP[i_particle_id].Density );
         }
         vsig1 = DMAX(vsig1, vsig2);

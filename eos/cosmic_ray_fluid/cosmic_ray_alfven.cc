@@ -64,7 +64,7 @@ double CosmicRay_Update_DriftKick(int i, double dt_entr, int mode)
     double bhat[3], Bmag=0, Bmag_Gauss, clight_code=C_LIGHT_CODE, Omega_gyro, eA[2], vA_code, vA2_c2, E_B, fac, flux_G, fac_Omega, flux[3], f_CR, f_CR_dot_B, cs_thermal, r_turb_driving, G_ion_neutral=0, G_turb_plus_linear_landau=0, G_nonlinear_landau_prefix=0;
     double ne=1, f_ion=1, nh0=0, nHe0, nHepp, nhp, nHeII, temperature, mu_meanwt=1, rho=CellP[i].Density*All.cf_a3inv, rho_cgs=rho*UNIT_DENSITY_IN_CGS;
 #ifdef COOLING 
-    temperature = ThermalProperties(u0, rho, i, &mu_meanwt, &ne, &nh0, &nhp, &nHe0, &nHeII, &nHepp); // get thermodynamic properties
+    temperature = ThermalProperties(u0, rho, i, &mu_meanwt, &ne, &nh0, &nhp, &nHe0, &nHeII, &nHepp, P, CellP); // get thermodynamic properties
     f_ion = DMIN(DMAX(DMAX(DMAX(1-nh0, nhp), ne/1.2), 1.e-8), 1.); // account for different measures above (assuming primordial composition)
 #endif
     for(k=0;k<3;k++) {if(mode==0) {bhat[k]=CellP[i].B[k];} else {bhat[k]=CellP[i].BPred[k];}} // grab whichever B field we need for our mode
@@ -83,9 +83,9 @@ double CosmicRay_Update_DriftKick(int i, double dt_entr, int mode)
     E_B = 0.5*Bmag*Bmag * (P[i].Mass/(CellP[i].Density*All.cf_a3inv)); // B-field energy (energy density times volume, for ratios with energies above)
     Bmag_Gauss = Bmag * UNIT_B_IN_GAUSS; // turn it into Gauss
     Omega_gyro = (8987.34 * Bmag_Gauss * (Z_charge_CR/E_CRs_Gev)) * UNIT_TIME_IN_CGS; // gyro frequency of the CR population we're evolving, converted to physical code units //
-    double vA_noion = Get_Gas_Alfven_speed_i(i); // Alfven speed in code units [recall B units such that there is no 4pi here]
+    double vA_noion = Get_Gas_Alfven_speed_i(i, P, CellP); // Alfven speed in code units [recall B units such that there is no 4pi here]
     vA_code = Get_Gas_ion_Alfven_speed_i(i); // include ionization appropriately for small-scale modes
-    cs_thermal = sqrt(convert_internalenergy_soundspeed2(i,u0)); // thermal sound speed at appropriate drift-time [in code units, physical]
+    cs_thermal = sqrt(convert_internalenergy_soundspeed2(i,u0, P, CellP)); // thermal sound speed at appropriate drift-time [in code units, physical]
     vA2_c2 = vA_code*vA_code / (clight_code*clight_code); // Alfven speed vs speed of light
     fac_Omega = (3.*M_PI/16.) * Omega_gyro * (1.+2.*vA2_c2); // factor which will be used heavily below
     /* for turbulent (anisotropic and linear landau) damping terms: need to know the turbulent driving scale: assume a cascade with a driving length equal to the pressure gradient scale length */
@@ -147,7 +147,7 @@ double CosmicRay_Update_DriftKick(int i, double dt_entr, int mode)
     int i1,i2; double v2_t=0,dv2_t=0,b2_t=0,db2_t=0,x_LL,M_A,h0,fturb_multiplier=1; // factor which will represent which cascade model we are going to use
     for(i1=0;i1<3;i1++)
     {
-        v2_t += CellP[i].VelPred[i1]*CellP[i].VelPred[i1]; b2_t += Get_Gas_BField(i,i1) * Get_Gas_BField(i,i1);
+        v2_t += CellP[i].VelPred[i1]*CellP[i].VelPred[i1]; b2_t += Get_Gas_BField(i,i1, P, CellP) * Get_Gas_BField(i,i1, P, CellP);
         for(i2=0;i2<3;i2++) {dv2_t += CellP[i].Gradients.Velocity[i1][i2]*CellP[i].Gradients.Velocity[i1][i2]; db2_t += CellP[i].Gradients.B[i1][i2]*CellP[i].Gradients.B[i1][i2];}
     }
     v2_t=sqrt(v2_t); b2_t=sqrt(b2_t); dv2_t=sqrt(dv2_t); db2_t=sqrt(db2_t); dv2_t/=All.cf_atime; db2_t/=All.cf_atime; b2_t*=All.cf_a2inv; db2_t*=All.cf_a2inv; v2_t/=All.cf_atime; dv2_t/=All.cf_atime; h0=Get_Particle_Size(i)*All.cf_atime; // physical units

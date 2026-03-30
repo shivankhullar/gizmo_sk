@@ -56,7 +56,7 @@ void find_timesteps(void)
             if(P[i].Type==0)
             {
                 double vsig2 = 0.5  * fabs(CellP[i].MaxSignalVel); // in v_phys units //
-                double vsig1 = sqrt( Get_Gas_effective_soundspeed_i(i)*Get_Gas_effective_soundspeed_i(i) + fac_magnetic_pressure * (Get_Gas_BField(i,0)*Get_Gas_BField(i,0)+Get_Gas_BField(i,1)*Get_Gas_BField(i,1)+Get_Gas_BField(i,2)*Get_Gas_BField(i,2)) / CellP[i].Density );
+                double vsig1 = sqrt( Get_Gas_effective_soundspeed_i(i, P, CellP)*Get_Gas_effective_soundspeed_i(i, P, CellP) + fac_magnetic_pressure * (Get_Gas_BField(i,0, P, CellP)*Get_Gas_BField(i,0, P, CellP)+Get_Gas_BField(i,1, P, CellP)*Get_Gas_BField(i,1, P, CellP)+Get_Gas_BField(i,2, P, CellP)*Get_Gas_BField(i,2, P, CellP)) / CellP[i].Density );
                 double vsig0 = DMAX(vsig1,vsig2);
 
                 if(vsig0 > fastwavespeed) fastwavespeed = vsig0; // physical unit
@@ -503,7 +503,7 @@ integertime get_timestep(int p,		/*!< particle index */
 #ifdef GRAIN_FLUID
     if((1 << P[p].Type) & (GRAIN_PTYPES))
     {
-        csnd = convert_internalenergy_soundspeed2(p, P[p].Gas_InternalEnergy);
+        csnd = convert_internalenergy_soundspeed2(p, P[p].Gas_InternalEnergy, P, CellP);
         int k; for(k=0;k<3;k++) {csnd += (P[p].Gas_Velocity[k]-P[p].Vel[k])*(P[p].Gas_Velocity[k]-P[p].Vel[k]);}
 #if defined(GRAIN_LORENTZFORCE)
         for(k=0;k<3;k++) {csnd += P[p].Gas_B[k]*P[p].Gas_B[k] / (2.0 * P[p].Gas_Density);}
@@ -535,7 +535,7 @@ integertime get_timestep(int p,		/*!< particle index */
         if(dt_courant < dt) dt = dt_courant;
     }
 #ifdef GRAIN_RDI_TESTPROBLEM_LIVE_RADIATION_INJECTION
-    if(P[p].Type>-1) {double dt_inj = 0.1 * P[p].KernelRadius / c_light_code_reduced(p); if(P[p].Type==4) {dt_inj*=0.25;} if(dt_inj < dt) {dt = dt_inj;}}
+    if(P[p].Type>-1) {double dt_inj = 0.1 * P[p].KernelRadius / c_light_code_reduced(p,P,CellP); if(P[p].Type==4) {dt_inj*=0.25;} if(dt_inj < dt) {dt = dt_inj;}}
 #endif
 #endif
 
@@ -592,7 +592,7 @@ integertime get_timestep(int p,		/*!< particle index */
                         double tmp_grad = CellP[p].Gradients.B[k][k2];
                         b_grad += tmp_grad * tmp_grad;
                     }
-                    double tmp_grad = Get_Gas_BField(p,k);
+                    double tmp_grad = Get_Gas_BField(p,k, P, CellP);
                     b_mag += tmp_grad * tmp_grad;
                 }
                 double L_cond_inv = MIN_REAL_NUMBER + sqrt(b_grad / (MIN_REAL_NUMBER + b_mag));
@@ -693,12 +693,12 @@ integertime get_timestep(int p,		/*!< particle index */
                     double gradETmag=0; for(k=0;k<3;k++) {gradETmag += CellP[p].Gradients.Rad_E_gamma_ET[kf][k]*CellP[p].Gradients.Rad_E_gamma_ET[kf][k];}
                     double L_ETgrad_inv = sqrt(gradETmag) / (1.e-37 + CellP[p].Rad_E_gamma[kf] * CellP[p].Density/P[p].Mass);
                     double L_RT_diffusion = DMIN(L_particle , 1./(3.*L_ETgrad_inv)) * All.cf_atime;
-                    double dt_rt_diffusion = dt_prefac_diffusion * L_RT_diffusion*L_RT_diffusion / (MIN_REAL_NUMBER + rt_diffusion_coefficient(p,kf));
+                    double dt_rt_diffusion = dt_prefac_diffusion * L_RT_diffusion*L_RT_diffusion / (MIN_REAL_NUMBER + rt_diffusion_coefficient(p,kf,P,CellP));
                     double dt_advective = dt_rt_diffusion * DMAX(1,DMAX(L_particle , 1/(MIN_REAL_NUMBER + L_ETgrad_inv))*All.cf_atime / L_RT_diffusion);
                     double dt_rt_work = All.CourantFac * DMIN( L_RT_diffusion / csnd , L_particle*All.cf_atime / ((2./3.)*sqrt(CellP[p].Rad_E_gamma[kf]/P[p].Mass)) ); /* time-step related to radiation work, radiation soundspeed, relevant in strongly-coupled limit */
 #ifdef RT_FLUXLIMITER /* if we are flux-limited, we can account for the flux limiter making the timestep advective */
                     if(dt_advective > dt_rt_diffusion) {dt_rt_diffusion *= 1. + (1.-CellP[p].Rad_Flux_Limiter[kf]) * DMAX(0,(dt_advective/dt_rt_diffusion-1.));}
-                    dt_advective = All.CourantFac * 0.5 * (L_particle*All.cf_atime) / c_light_code_reduced(p);
+                    dt_advective = All.CourantFac * 0.5 * (L_particle*All.cf_atime) / c_light_code_reduced(p,P,CellP);
                     dt_rt_diffusion = DMAX(dt_rt_diffusion, dt_advective);
                     dt_rt_work /= MIN_REAL_NUMBER + CellP[p].Rad_Flux_Limiter[kf];
                     if((CellP[p].Rad_Flux_Limiter[kf] <= 0)||(dt_rt_diffusion<=0)) {dt_rt_diffusion = 1.e9 * dt;}
@@ -715,7 +715,7 @@ integertime get_timestep(int p,		/*!< particle index */
 #endif // explicit-solver check
 #if defined(RT_RAD_PRESSURE_FORCES) // -regardless- of if using an explicit solver, here the acceleration isn't saved to Rad_Accel so we calculate that timestep constraint
                     double gradErad=0; for(k=0;k<3;k++) {gradErad+=CellP[p].Gradients.Rad_E_gamma_ET[kf][k]*CellP[p].Gradients.Rad_E_gamma_ET[kf][k];}
-                    double radacc = return_flux_limiter(p,kf) * (sqrt(gradErad) / CellP[p].Density) / All.cf_atime; // radiation acceleration for a timestep criterion
+                    double radacc = return_flux_limiter(p,kf,P,CellP) * (sqrt(gradErad) / CellP[p].Density) / All.cf_atime; // radiation acceleration for a timestep criterion
                     if(gradErad > 0 && radacc > 0)
                     {
                         double dt_radacc = sqrt(2 * All.ErrTolIntAccuracy * All.cf_atime * KERNEL_CORE_SIZE * DMAX(ForceSoftening_KernelRadius(p), P[p].KernelRadius) / radacc);
@@ -728,17 +728,17 @@ integertime get_timestep(int p,		/*!< particle index */
                 
                 /* now consider the (simpler) CFL-type condition required for advective solvers like M1 or intensity/ray integrators */
 #if defined(RT_M1) || defined(RT_LOCALRAYGRID)
-                dt_courant = All.CourantFac * (L_particle*All.cf_atime) / c_light_code_reduced(p); /* courant-type criterion, using the reduced speed of light */
+                dt_courant = All.CourantFac * (L_particle*All.cf_atime) / c_light_code_reduced(p,P,CellP); /* courant-type criterion, using the reduced speed of light */
 #if defined(SINGLE_STAR_STARFORGE_DEFAULTS)
-                dt_courant = 0.4 * (L_particle*All.cf_atime) / c_light_code_reduced(p); /* hacked here for starforge, where mike's experimentation suggests we can get away with a slightly larger courant factor. remains experimental. courant-type criterion, using the reduced speed of light - here we hardcode the most aggressive possible Courant factor as an optimization */
+                dt_courant = 0.4 * (L_particle*All.cf_atime) / c_light_code_reduced(p,P,CellP); /* hacked here for starforge, where mike's experimentation suggests we can get away with a slightly larger courant factor. remains experimental. courant-type criterion, using the reduced speed of light - here we hardcode the most aggressive possible Courant factor as an optimization */
 #ifdef SINK_WIND_SPAWN
-                if((CellP[p].MaxSignalVel > 0.5*c_light_code_reduced(p)) || (P[p].ID == All.SpawnedWindCellID && P[p].Type == 0)) {dt_courant *= 0.5}; // be more careful if this is a jet cell or there are transluminal velocities
+                if((CellP[p].MaxSignalVel > 0.5*c_light_code_reduced(p,P,CellP)) || (P[p].ID == All.SpawnedWindCellID && P[p].Type == 0)) {dt_courant *= 0.5}; // be more careful if this is a jet cell or there are transluminal velocities
 #endif
 #endif                
 #if defined(GALSF) && !defined(SINGLE_STAR_SINK_DYNAMICS) && defined(GALSF_FB_FIRE_STELLAREVOLUTION) // custom hacks for FIRE-RT tests; can override CFL condition with diffusion timestep certain limits
                 int kf; for(kf=0;kf<N_RT_FREQ_BINS;kf++)
                 {
-                    double dt_rt_diffusion = dt_prefac_diffusion * (L_particle*All.cf_atime)*(L_particle*All.cf_atime) / (MIN_REAL_NUMBER + rt_diffusion_coefficient(p,kf));
+                    double dt_rt_diffusion = dt_prefac_diffusion * (L_particle*All.cf_atime)*(L_particle*All.cf_atime) / (MIN_REAL_NUMBER + rt_diffusion_coefficient(p,kf,P,CellP));
                     if((CellP[p].Rad_E_gamma[kf] <= MIN_REAL_NUMBER) || (CellP[p].Rad_E_gamma_Pred[kf] <= MIN_REAL_NUMBER) || (CellP[p].Rad_E_gamma[kf] < 1.e-5*P[p].Mass*CellP[p].InternalEnergy)) {dt_rt_diffusion = 1.e10 * dt;} /* ignore particles where the radiation energy density is negligible */
                     dt_rad = DMIN(dt_rad, dt_rt_diffusion);
                 }
@@ -810,10 +810,10 @@ integertime get_timestep(int p,		/*!< particle index */
 #if defined(DIVBCLEANING_DEDNER)
             double fac_magnetic_pressure = 1. / All.cf_atime;
             double phi_b_units = Get_Gas_PhiField(p) / ( All.cf_atime * CellP[p].MaxSignalVel);
-            double vsig1 =  sqrt( Get_Gas_effective_soundspeed_i(p)*Get_Gas_effective_soundspeed_i(p) +
-                    fac_magnetic_pressure * (Get_Gas_BField(p,0)*Get_Gas_BField(p,0) +
-                                             Get_Gas_BField(p,1)*Get_Gas_BField(p,1)+
-                                             Get_Gas_BField(p,2)*Get_Gas_BField(p,2) +
+            double vsig1 =  sqrt( Get_Gas_effective_soundspeed_i(p, P, CellP)*Get_Gas_effective_soundspeed_i(p, P, CellP) +
+                    fac_magnetic_pressure * (Get_Gas_BField(p,0, P, CellP)*Get_Gas_BField(p,0, P, CellP) +
+                                             Get_Gas_BField(p,1, P, CellP)*Get_Gas_BField(p,1, P, CellP)+
+                                             Get_Gas_BField(p,2, P, CellP)*Get_Gas_BField(p,2, P, CellP) +
                                              phi_b_units*phi_b_units) / CellP[p].Density );
 
             dt_courant = 0.8 * All.CourantFac * (All.cf_atime*L_particle) / vsig1; // 2.0 factor may be added (PFH) //
@@ -1076,7 +1076,7 @@ integertime get_timestep(int p,		/*!< particle index */
                           (unsigned long long) P[p].ID, dt, dt_courant*All.cf_hubble_a, sqrt(2*All.ErrTolIntAccuracy*All.cf_atime*ForceSoftening_KernelRadius(p) / ac)*All.cf_hubble_a,
                           ac, agrav, agrav_pm, ahydro, arad, aturb, P[p].Pos[0], P[p].Pos[1], P[p].Pos[2], P[p].Vel[0]/All.cf_atime, P[p].Vel[1]/All.cf_atime, P[p].Vel[2]/All.cf_atime,
                           P[p].KernelRadius*All.cf_atime, CellP[p].Density*All.cf_a3inv, CellP[p].InternalEnergy, CellP[p].DtInternalEnergy, P[p].Particle_DivVel*All.cf_a2inv,
-                          CellP[p].Pressure*All.cf_a3inv, Get_Gas_effective_soundspeed_i(p), Get_Gas_Alfven_speed_i(p), Get_Gas_Ionized_Fraction(p),
+                          CellP[p].Pressure*All.cf_a3inv, Get_Gas_effective_soundspeed_i(p, P, CellP), Get_Gas_Alfven_speed_i(p, P, CellP), Get_Gas_Ionized_Fraction(p, P, CellP),
                           csnd, ForceSoftening_KernelRadius(p)*All.cf_atime, P[p].Mass, P[p].Type, CellP[p].ConditionNumber, P[p].NumNgb,
                           CellP[p].NV_T[0][0],CellP[p].NV_T[0][1],CellP[p].NV_T[0][2],CellP[p].NV_T[1][0],CellP[p].NV_T[1][1],CellP[p].NV_T[1][2],CellP[p].NV_T[2][0],CellP[p].NV_T[2][1],CellP[p].NV_T[2][2]);
         }

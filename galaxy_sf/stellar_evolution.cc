@@ -1108,7 +1108,7 @@ double single_star_feedback_velocity_fortimestep(int n) {
     if(P[n].ProtoStellarStage == 6) {v_fb = DMAX(v_fb, single_star_SN_velocity(n));}
 #endif    
 #ifdef RADTRANSFER
-    v_fb = DMAX(v_fb, c_light_code_reduced(n));  // produces a timestep criterion redundant with the RSOL CFL condition, but can be important if running fancy timestepping hacks that violate CFL under special circumstances
+    v_fb = DMAX(v_fb, c_light_code_reduced(n,P,CellP));  // produces a timestep criterion redundant with the RSOL CFL condition, but can be important if running fancy timestepping hacks that violate CFL under special circumstances
 #endif
     if(All.Ti_Current == 0 && RestartFlag == 0) v_fb = DMAX(1e3 / UNIT_VEL_IN_KMS, v_fb); // for idealized box problems
     return v_fb;

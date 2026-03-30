@@ -97,7 +97,7 @@ void apply_grain_dragforce(void)
 #ifdef COOLING  // in this case, have the ability to calculate more accurate ionization fraction
                     double u_tmp, ne_tmp = 1, nh0_tmp = 0, mu_tmp = 1, temp_tmp, nHeII_tmp, nhp_tmp, nHe0_tmp, nHepp_tmp;
                     u_tmp = T_Kelvin / (2.3 * U_TO_TEMP_UNITS); // needs to be in code units; 2.3 for mean molecular weight factor and gamma_eos factor //
-                    temp_tmp = ThermalProperties(u_tmp, rho_gas, -1, &mu_tmp, &ne_tmp, &nh0_tmp, &nhp_tmp, &nHe0_tmp, &nHeII_tmp, &nHepp_tmp);
+                    temp_tmp = ThermalProperties(u_tmp, rho_gas, -1, &mu_tmp, &ne_tmp, &nh0_tmp, &nhp_tmp, &nHe0_tmp, &nHeII_tmp, &nHepp_tmp, P, CellP);
                     f_ion_to_use = DMIN(ne_tmp , 1.);
 #endif
                     tstop_Coulomb_inv *= f_ion_to_use; // correct for ionization fraction
@@ -448,7 +448,7 @@ static inline void INPUTFUNCTION_NAME(struct INPUT_STRUCT_NAME *in, int i, int l
         for(k_freq=0;k_freq<N_RT_FREQ_BINS;k_freq++)
         {
             double Q_abs_eff = return_grain_extinction_efficiency_Q(i, k_freq); /* need this to calculate the absorption efficiency in each band */
-            in->Grain_Abs_Coeff[k_freq] = Q_abs_eff * 3. / (4. * c_light_code_reduced(j) * rho_grain_code * R_grain_code * rho_gas_code);
+            in->Grain_Abs_Coeff[k_freq] = Q_abs_eff * 3. / (4. * c_light_code_reduced(i,P,CellP) * rho_grain_code * R_grain_code * rho_gas_code);
         }
     }
 }
@@ -510,7 +510,7 @@ int interpolate_fluxes_opacities_gasgrains_evaluate(int target, int mode, int *e
                         }
                     } else { /* sitting on a -grain- element, want to interpolate flux to it and calculate radiation pressure force */
                         wt = CellP[j].Density*All.cf_a3inv * wk_i; /* weight of element to 'i, with appropriate coefficient from above */
-                        double radacc[3]={0},vel_i[3]={0},dtEgamma_work_done=0; for(k=0;k<3;k++) {vel_i[k]=rsol_correction_factor_for_velocity_terms(j)*local.Vel[k]/All.cf_atime;} /* velocity of interest here is the grain velocity (radiation in lab frame) */
+                        double radacc[3]={0},vel_i[3]={0},dtEgamma_work_done=0; for(k=0;k<3;k++) {vel_i[k]=rsol_correction_factor_for_velocity_terms(j,P,CellP)*local.Vel[k]/All.cf_atime;} /* velocity of interest here is the grain velocity (radiation in lab frame) */
                         for(k_freq=0;k_freq<N_RT_FREQ_BINS;k_freq++)
                         {
                             double f_kappa_abs=0.5,vdot_h[3]={0},flux_i[3]={0},flux_mag=0,erad_i=0,flux_corr=1;
@@ -524,10 +524,10 @@ int interpolate_fluxes_opacities_gasgrains_evaluate(int target, int mode, int *e
                             erad_i = CellP[j].Rad_E_gamma_Pred[k_freq];
                             for(k=0;k<3;k++) {flux_i[k] = -CellP[j].Gradients.Rad_E_gamma_ET[k_freq][k]; flux_mag+=flux_i[k]*flux_i[k];}
                             if(flux_mag>0) {for(k=0;k<3;k++) {flux_i[k]/=sqrt(flux_mag);}} else {flux_i[0]=0;flux_i[1]=0;flux_i[2]=1;}
-                            flux_mag = erad_i*c_light_code_reduced(j); for(k=0;k<3;k++) {flux_i[k]*=flux_mag;}
+                            flux_mag = erad_i*c_light_code_reduced(j,P,CellP); for(k=0;k<3;k++) {flux_i[k]*=flux_mag;}
 #endif
                             if(!isfinite(flux_mag) || flux_mag<=MIN_REAL_NUMBER) {flux_mag=MIN_REAL_NUMBER; flux_i[0]=flux_i[1]=0; flux_i[2]=flux_mag;}
-                            double flux_thin = erad_i * c_light_code_reduced(j); if(!isfinite(flux_thin) || flux_thin<=0) {flux_thin=0;}
+                            double flux_thin = erad_i * c_light_code_reduced(j,P,CellP); if(!isfinite(flux_thin) || flux_thin<=0) {flux_thin=0;}
                             flux_corr = DMIN(1., 100.*flux_thin/flux_mag);
                             for(k=0;k<3;k++)
                             {

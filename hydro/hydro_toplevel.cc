@@ -400,7 +400,7 @@ static inline void particle2in_hydra(struct INPUT_STRUCT_NAME *in, int i, int lo
     in->Density = CellP[i].Density;
     in->Pressure = CellP[i].Pressure;
     in->InternalEnergyPred = CellP[i].InternalEnergyPred;
-    in->SoundSpeed = Get_Gas_effective_soundspeed_i(i);
+    in->SoundSpeed = Get_Gas_effective_soundspeed_i(i, P, CellP);
     in->dt_hydrostep_i = GET_PARTICLE_TIMESTEP_IN_PHYSICAL(i);
     in->ConditionNumber = CellP[i].ConditionNumber;
     in->FaceClosureError = CellP[i].FaceClosureError;
@@ -467,7 +467,7 @@ static inline void particle2in_hydra(struct INPUT_STRUCT_NAME *in, int i, int lo
     {
         in->Rad_E_gamma[k] = CellP[i].Rad_E_gamma_Pred[k];
         in->Rad_Kappa[k] = CellP[i].Rad_Kappa[k];
-        in->RT_DiffusionCoeff[k] = rt_diffusion_coefficient(i,k);
+        in->RT_DiffusionCoeff[k] = rt_diffusion_coefficient(i,k,P,CellP);
 #if defined(RT_EVOLVE_FLUX) || defined(HYDRO_SPH)
         {int k_dir; for(k_dir=0;k_dir<6;k_dir++) in->ET[k][k_dir] = CellP[i].ET[k][k_dir];}
 #endif
@@ -515,7 +515,7 @@ static inline void particle2in_hydra(struct INPUT_STRUCT_NAME *in, int i, int lo
 #endif
 
 #ifdef MAGNETIC
-    for(k = 0; k < 3; k++) {in->BPred[k] = Get_Gas_BField(i,k);}
+    for(k = 0; k < 3; k++) {in->BPred[k] = Get_Gas_BField(i,k, P, CellP);}
 #if defined(SPH_TP12_ARTIFICIAL_RESISTIVITY)
     in->Balpha = CellP[i].Balpha;
 #endif
@@ -675,8 +675,8 @@ void hydro_final_operations_and_cleanup(void)
                 /* this part of the induction equation has to do with advection of div-B, it is not present in SPH */
                 CellP[i].DtB[k] -= CellP[i].divB * CellP[i].VelPred[k]/All.cf_atime;
 #endif
-                CellP[i].HydroAccel[k] -= CellP[i].divB * Get_Gas_BField(i,k)*All.cf_a2inv;
-                CellP[i].DtInternalEnergy -= CellP[i].divB * (CellP[i].VelPred[k]/All.cf_atime) * Get_Gas_BField(i,k)*All.cf_a2inv;
+                CellP[i].HydroAccel[k] -= CellP[i].divB * Get_Gas_BField(i,k, P, CellP)*All.cf_a2inv;
+                CellP[i].DtInternalEnergy -= CellP[i].divB * (CellP[i].VelPred[k]/All.cf_atime) * Get_Gas_BField(i,k, P, CellP)*All.cf_a2inv;
             }
 
             double magnorm_closure = Get_DtB_FaceArea_Limiter(i);
@@ -705,7 +705,7 @@ void hydro_final_operations_and_cleanup(void)
                 for(k=0; k<3; k++)
                 {
                     CellP[i].DtB[k] += PhiCorr_Norm * CellP[i].DtB_PhiCorr[k];
-                    CellP[i].DtInternalEnergy += PhiCorr_Norm * CellP[i].DtB_PhiCorr[k] * Get_Gas_BField(i,k)*All.cf_a2inv;
+                    CellP[i].DtInternalEnergy += PhiCorr_Norm * CellP[i].DtB_PhiCorr[k] * Get_Gas_BField(i,k, P, CellP)*All.cf_a2inv;
                 }
             }
 
@@ -719,7 +719,7 @@ void hydro_final_operations_and_cleanup(void)
                 double tmp_ded = 0.5 * CellP[i].MaxSignalVel / (fac_mu*All.cf_atime); // has units of v_physical now
                 /* do a check to make sure divB isn't something wildly divergent (owing to particles being too close) */
                 double b2_max = 0.0;
-                for(k=0;k<3;k++) {b2_max += Get_Gas_BField(i,k)*Get_Gas_BField(i,k);}
+                for(k=0;k<3;k++) {b2_max += Get_Gas_BField(i,k, P, CellP)*Get_Gas_BField(i,k, P, CellP);}
                 b2_max = 100.0 * fabs( sqrt(b2_max) * All.cf_a2inv * P[i].Mass / (CellP[i].Density*All.cf_a3inv) * 1.0 / (P[i].KernelRadius*All.cf_atime) );
                 if(fabs(CellP[i].divB) > b2_max) {CellP[i].divB *= b2_max / fabs(CellP[i].divB);}
                 /* ok now can apply this to get the growth rate of phi */
@@ -750,7 +750,7 @@ void hydro_final_operations_and_cleanup(void)
 #ifndef HYDRO_SPH
             for(k=0;k<3;k++)
             {
-                CellP[i].DtInternalEnergy += -Get_Gas_BField(i,k)*All.cf_a2inv * CellP[i].DtB[k];
+                CellP[i].DtInternalEnergy += -Get_Gas_BField(i,k, P, CellP)*All.cf_a2inv * CellP[i].DtB[k];
             }
 #endif
             for(k=0;k<3;k++) {CellP[i].DtB[k] *= magnorm_closure;}
@@ -762,7 +762,7 @@ void hydro_final_operations_and_cleanup(void)
             if(P[i].KernelRadius >= 0.99*All.MaxKernelRadius) {CellP[i].DtInternalEnergy = 0;}
 
             // need to explicitly include adiabatic correction from the hubble-flow (for drifting) here //
-            if(All.ComovingIntegrationOn) {CellP[i].DtInternalEnergy -= 3*(gamma_eos(i)-1) * CellP[i].InternalEnergyPred * All.cf_hubble_a;}
+            if(All.ComovingIntegrationOn) {CellP[i].DtInternalEnergy -= 3*(gamma_eos(i, P, CellP)-1) * CellP[i].InternalEnergyPred * All.cf_hubble_a;}
             // = du/dlna -3*(gamma-1)*u ; then dlna/dt = H(z) =  All.cf_hubble_a //
 
 
@@ -771,25 +771,25 @@ void hydro_final_operations_and_cleanup(void)
             double radacc[3]; radacc[0]=radacc[1]=radacc[2]=0; int kfreq;
             for(kfreq=0;kfreq<N_RT_FREQ_BINS;kfreq++)
             {
-                double vol_inv = CellP[i].Density*All.cf_a3inv/P[i].Mass, f_kappa_abs = rt_absorb_frac_albedo(i,kfreq), vel_i[3]={0}, vdot_h[3]={0}, vdot_D[3]={0}, flux_i[3]={0}, flux_mag=0, erad_i=0, flux_corr=0, work_band=0, radacc_thisband[3]={0}, rmag=0;
+                double vol_inv = CellP[i].Density*All.cf_a3inv/P[i].Mass, f_kappa_abs = rt_absorb_frac_albedo(i,kfreq,P,CellP), vel_i[3]={0}, vdot_h[3]={0}, vdot_D[3]={0}, flux_i[3]={0}, flux_mag=0, erad_i=0, flux_corr=0, work_band=0, radacc_thisband[3]={0}, rmag=0;
                 erad_i = CellP[i].Rad_E_gamma_Pred[kfreq]*vol_inv; // radiation energy density, needed below
-                for(k=0;k<3;k++) {flux_i[k]=CellP[i].Rad_Flux_Pred[kfreq][k]*vol_inv; vel_i[k]=(c_light_code_reduced(i)/C_LIGHT_CODE)*CellP[i].VelPred[k]/All.cf_atime; flux_mag+=flux_i[k]*flux_i[k];}
+                for(k=0;k<3;k++) {flux_i[k]=CellP[i].Rad_Flux_Pred[kfreq][k]*vol_inv; vel_i[k]=(c_light_code_reduced(i,P,CellP)/C_LIGHT_CODE)*CellP[i].VelPred[k]/All.cf_atime; flux_mag+=flux_i[k]*flux_i[k];}
                 eddington_tensor_dot_vector(CellP[i].ET[kfreq],vel_i,vdot_D); // note these 'vdoth' terms shouldn't be included in FLD, since its really assuming the entire right-hand-side of the flux equation reaches equilibrium with the pressure tensor, which gives the expression in rt_utilities
-                for(k=0;k<3;k++) {vdot_h[k] = (rsol_correction_factor_for_velocity_terms(i)*C_LIGHT_CODE/c_light_code_reduced(i)) * erad_i * (vel_i[k] + vdot_D[k]);} // calculate volume integral of scattering coefficient t_inv * (gas_vel . [e_rad*I + P_rad_tensor]), which gives an additional time-derivative term. this is the P term //
-                double flux_thin = erad_i * c_light_code_reduced(i); if(flux_mag>0) {flux_mag=sqrt(flux_mag);} else {flux_mag=1.e-20*flux_thin;}
+                for(k=0;k<3;k++) {vdot_h[k] = (rsol_correction_factor_for_velocity_terms(i,P,CellP)*C_LIGHT_CODE/c_light_code_reduced(i,P,CellP)) * erad_i * (vel_i[k] + vdot_D[k]);} // calculate volume integral of scattering coefficient t_inv * (gas_vel . [e_rad*I + P_rad_tensor]), which gives an additional time-derivative term. this is the P term //
+                double flux_thin = erad_i * c_light_code_reduced(i,P,CellP); if(flux_mag>0) {flux_mag=sqrt(flux_mag);} else {flux_mag=1.e-20*flux_thin;}
                 if(flux_mag > 0) {flux_corr = DMIN(1., flux_thin/flux_mag); // restrict flux here (b/c drifted can exceed physical b/c of integration errors
 #if defined(RT_ENABLE_R15_GRADIENTFIX)
                     flux_corr = flux_thin/flux_mag; // set to maximum (optically thin limit)
 #endif
                 }
-                double L_particle=Get_Particle_Size(i)*All.cf_atime, Sigma_particle=P[i].Mass/(M_PI*L_particle*L_particle), abs_per_kappa_dt=c_light_code_reduced(i)*(CellP[i].Density*All.cf_a3inv)*dt; // effective surface density through particle & fractional absorption over timestep
+                double L_particle=Get_Particle_Size(i)*All.cf_atime, Sigma_particle=P[i].Mass/(M_PI*L_particle*L_particle), abs_per_kappa_dt=c_light_code_reduced(i,P,CellP)*(CellP[i].Density*All.cf_a3inv)*dt; // effective surface density through particle & fractional absorption over timestep
                 int checker_int = 0; // normal default: only use the corrections below for bands which dont re-emit to the same band
                 checker_int = 1; // actually here and above now changed to use the slabfac corrections for all bands. in the resolved limit this should still be correct because the re-emitted photons should be isotropic: otherwise you run into linear momentum conservation problems. this is only an issue if the source is at the center of the distribution.
                 double slabfac_rp=1; if(check_if_absorbed_photons_can_be_reemitted_into_same_band(kfreq)<=checker_int) {slabfac_rp=slab_averaging_function(f_kappa_abs*CellP[i].Rad_Kappa[kfreq]*Sigma_particle) * slab_averaging_function(f_kappa_abs*CellP[i].Rad_Kappa[kfreq]*abs_per_kappa_dt);} // reduction factor for absorption over dt
-                for(k=0;k<3;k++) {radacc_thisband[k] = slabfac_rp * (CellP[i].Rad_Kappa[kfreq]/c_light_code_reduced(i)) * (flux_corr*flux_i[k] - vdot_h[k]); rmag += radacc_thisband[k]*radacc_thisband[k];} // acceleration term before accounting for the 'work' term, which is calculated separately in the absorption/emission loop
+                for(k=0;k<3;k++) {radacc_thisband[k] = slabfac_rp * (CellP[i].Rad_Kappa[kfreq]/c_light_code_reduced(i,P,CellP)) * (flux_corr*flux_i[k] - vdot_h[k]); rmag += radacc_thisband[k]*radacc_thisband[k];} // acceleration term before accounting for the 'work' term, which is calculated separately in the absorption/emission loop
                 if(check_if_absorbed_photons_can_be_reemitted_into_same_band(kfreq)<=checker_int && f_kappa_abs > MIN_REAL_NUMBER && rmag > MIN_REAL_NUMBER && dt > 0 && P[i].Mass > 0) { // bands that destroy photons upon absorption (e.g. ionization, dust absorption) should limit the imparted momentum to the total photon momentum available - the flux in the solver normally prevents this but this addresses some edge cases with e.g. pathological ICs, rapidly-varying kappa, etc.
-                    rmag=sqrt(rmag); double r_from_abs=f_kappa_abs*rmag, abs_dt=rt_absorption_rate(i,kfreq)*dt, dE_abs=erad_i*(1.-exp(-abs_dt)); if(abs_dt<0.01) {dE_abs=erad_i*abs_dt;}
-                    double rmag_max_abs=dE_abs/(vol_inv*P[i].Mass*c_light_code_reduced(i)*dt); if(rmag_max_abs<r_from_abs) {double cfac=1.+(rmag_max_abs-r_from_abs)/rmag; if(cfac>0 && cfac<1) {for(k=0;k<3;k++) {radacc_thisband[k]*=cfac;}}}
+                    rmag=sqrt(rmag); double r_from_abs=f_kappa_abs*rmag, abs_dt=rt_absorption_rate(i,kfreq,P,CellP)*dt, dE_abs=erad_i*(1.-exp(-abs_dt)); if(abs_dt<0.01) {dE_abs=erad_i*abs_dt;}
+                    double rmag_max_abs=dE_abs/(vol_inv*P[i].Mass*c_light_code_reduced(i,P,CellP)*dt); if(rmag_max_abs<r_from_abs) {double cfac=1.+(rmag_max_abs-r_from_abs)/rmag; if(cfac>0 && cfac<1) {for(k=0;k<3;k++) {radacc_thisband[k]*=cfac;}}}
                 }
                 for(k=0;k<3;k++) { /* now record the total work term and photon momentum imparted to gas */
                     radacc[k]+=radacc_thisband[k]; work_band += radacc_thisband[k] * vel_i[k] * P[i].Mass; // PdV work done by photons [absorbed ones are fully-destroyed, so their loss of energy and momentum is already accounted for by their deletion in this limit -- note that we have to be careful about the RSOL factors here! //
@@ -798,7 +798,7 @@ void hydro_final_operations_and_cleanup(void)
                 f_kappa_abs = 0;
 #endif
                 CellP[i].Dt_Rad_E_gamma[kfreq] += (2.*f_kappa_abs-1.)*work_band; // loss/gain term for the radiation field itself
-                CellP[i].DtInternalEnergy -= (C_LIGHT_CODE/c_light_code_reduced(i)) * 2.*f_kappa_abs*work_band / P[i].Mass; // correct for rsol factor above which reduced vel_i by rsol; -only- add back this term for gas
+                CellP[i].DtInternalEnergy -= (C_LIGHT_CODE/c_light_code_reduced(i,P,CellP)) * 2.*f_kappa_abs*work_band / P[i].Mass; // correct for rsol factor above which reduced vel_i by rsol; -only- add back this term for gas
             }
             for(k=0;k<3;k++) { /* now actually set the frequency-integrated cell values as needed */
 #ifdef RT_RAD_PRESSURE_OUTPUT
@@ -810,8 +810,8 @@ void hydro_final_operations_and_cleanup(void)
 #endif
 #ifdef RT_RADPRESSURE_IN_HYDRO
             int kfreq; for(kfreq=0;kfreq<N_RT_FREQ_BINS;kfreq++) {
-                double fac = (1./3.) * return_flux_limiter(i,kfreq) * CellP[i].Rad_E_gamma_Pred[kfreq] * P[i].Particle_DivVel*All.cf_a2inv * (1.-2.*rt_absorb_frac_albedo(i,kfreq));
-                CellP[i].Dt_Rad_E_gamma[kfreq] -= (c_light_code_reduced(i)/C_LIGHT_CODE) * fac; CellP[i].DtInternalEnergy += fac / P[i].Mass; /* exact energy conservation; for appropriate RSOL definitions - careful of terms here where beta arises */
+                double fac = (1./3.) * return_flux_limiter(i,kfreq,P,CellP) * CellP[i].Rad_E_gamma_Pred[kfreq] * P[i].Particle_DivVel*All.cf_a2inv * (1.-2.*rt_absorb_frac_albedo(i,kfreq,P,CellP));
+                CellP[i].Dt_Rad_E_gamma[kfreq] -= (c_light_code_reduced(i,P,CellP)/C_LIGHT_CODE) * fac; CellP[i].DtInternalEnergy += fac / P[i].Mass; /* exact energy conservation; for appropriate RSOL definitions - careful of terms here where beta arises */
             }
 #endif
 
@@ -842,7 +842,7 @@ void hydro_final_operations_and_cleanup(void)
 #if (defined(COSMIC_RAY_FLUID) && !defined(COOLING_OPERATOR_SPLIT)) || defined(COSMIC_RAY_SUBGRID_LEBRON)
             /* with the spectrum model, we account here the adiabatic heating/cooling of the 'fluid', here, which was solved in the hydro solver but doesn't resolve which portion goes to CRs and which to internal energy, with gamma=GAMMA_COSMICRAY */
 #ifdef COSMIC_RAY_SUBGRID_LEBRON
-            double P_cr_spec = (1./3.)*CellP[i].SubGrid_CosmicRayEnergyDensity/CellP[i].Density, P_tot_spec = P_cr_spec + (2./3.)*CellP[i].InternalEnergyPred + (1./2.)*pow(Get_Gas_Alfven_speed_i(i),2); // just include CR+thermal+magnetic here
+            double P_cr_spec = (1./3.)*CellP[i].SubGrid_CosmicRayEnergyDensity/CellP[i].Density, P_tot_spec = P_cr_spec + (2./3.)*CellP[i].InternalEnergyPred + (1./2.)*pow(Get_Gas_Alfven_speed_i(i, P, CellP),2); // just include CR+thermal+magnetic here
             CellP[i].DtInternalEnergy *= (1.-P_cr_spec/P_tot_spec); /* approximate correction, valid to level here [more sophisticated correction can cause problems since the PdV energy isn't actually being taken -out- of the CR field, as it would be if followed explicitly] */
 #else
             double gamma_minus_eCR_tmp=0; for(k=0;k<N_CR_PARTICLE_BINS;k++) {gamma_minus_eCR_tmp+=(GAMMA_COSMICRAY(k)-1.)*CellP[i].CosmicRayEnergyPred[k];} // routine below only depends on the total CR energy, not bin-by-bin energies, when we do it this way here

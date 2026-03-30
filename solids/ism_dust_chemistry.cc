@@ -130,7 +130,7 @@ void Initialize_ISMDustChem_Particle_Variables(int i)
         CellP[i].ISMDustChem_C_in_CO = CellP[i].ISMDustChem_MassFractionInDenseMolecular = 0.;
 #endif
         double temp_cutoff=1E5, ne=1, nh0=0, nHe0, nHepp, nhp, nHeII, temp, mu_meanwt=1, rho=CellP[i].Density*All.cf_a3inv, u0=CellP[i].InternalEnergyPred;
-        temp = ThermalProperties(u0, rho, i, &mu_meanwt, &ne, &nh0, &nhp, &nHe0, &nHeII, &nHepp);
+        temp = ThermalProperties(u0, rho, i, &mu_meanwt, &ne, &nh0, &nhp, &nHe0, &nHeII, &nHepp, P, CellP);
         if(All.Initial_ISMDustChem_Depletion > 0 && temp < temp_cutoff)
         {
             for(j=0;j<NUM_ISMDUSTCHEM_ELEMENTS;j++) {CellP[i].ISMDustChem_Dust_Metal[j] = 0.;}
@@ -1042,7 +1042,7 @@ void update_dust_processes(int i, double dtime_gyr)
     ISMDustChemEvo_renormalize_dust_fields(i);
 #endif
     int k; double ne=1, nh0=0, nHe0, nHepp, nhp, nHeII, temp, mu_meanwt=1, rho=CellP[i].Density*All.cf_a3inv, u0=CellP[i].InternalEnergyPred;
-    temp = ThermalProperties(u0, rho, i, &mu_meanwt, &ne, &nh0, &nhp, &nHe0, &nHeII, &nHepp);
+    temp = ThermalProperties(u0, rho, i, &mu_meanwt, &ne, &nh0, &nhp, &nHe0, &nHeII, &nHepp, P, CellP);
     rho*=UNIT_DENSITY_IN_CGS;
     
 #if !defined(GALSF_ISMDUSTCHEM_GRAINSIZEEVO) 
@@ -1097,7 +1097,7 @@ void update_dense_molecular_fields(int i, double temp, double rho, double nh0, d
     double surface_density = evaluate_NH_from_GradRho(P[i].GradRho,P[i].KernelRadius,CellP[i].Density,P[i].NumNgb,1,i) * UNIT_SURFDEN_IN_CGS; // converts to cgs
     // shielding length giving effective radius of gas particle
     double l_shield = surface_density / rho;
-    fH2 = Get_Gas_Molecular_Mass_Fraction(i, temp, nh0, ne, 0.);
+    fH2 = Get_Gas_Molecular_Mass_Fraction(i, temp, nh0, ne, 0., P, CellP);
     if (fH2 > 0)
     {
         double nHcgs = HYDROGEN_MASSFRAC * rho / PROTONMASS_CGS;

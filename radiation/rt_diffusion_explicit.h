@@ -13,7 +13,7 @@
 #define RT_ENHANCED_NUMERICAL_DIFFUSION /* option which increases numerical diffusion, to get smoother solutions, if desired; akin to slopelimiters~0 model */
 {
     // first define some variables needed regardless //
-    double c_light_eff = c_light_code_reduced(j), rsol_corr = rsol_correction_factor_for_velocity_terms(j);
+    double c_light_eff = c_light_code_reduced(j,P,CellP), rsol_corr = rsol_correction_factor_for_velocity_terms(j,P,CellP);
 #if defined(HYDRO_MESHLESS_FINITE_VOLUME)
     double v_frame[3]={0}; for(k=0;k<3;k++) {v_frame[k]=0.5*(ParticleVel_j[k] + local.ParticleVel[k])/All.cf_atime;} // frame velocity, not fluid velocity, is what appears here
 #else
@@ -30,7 +30,7 @@
     for(k_freq=0;k_freq<N_RT_FREQ_BINS;k_freq++)
     {
         Fluxes_Rad_E_gamma[k_freq] = 0;
-        double kappa_ij = 0.5 * (local.RT_DiffusionCoeff[k_freq] + rt_diffusion_coefficient(j,k_freq)); // physical
+        double kappa_ij = 0.5 * (local.RT_DiffusionCoeff[k_freq] + rt_diffusion_coefficient(j,k_freq,P,CellP)); // physical
         if((kappa_ij>0)&&(local.Mass>0)&&(P[j].Mass>0))
         {
             double scalar_i = local.Rad_E_gamma[k_freq] / V_i; // volumetric photon number density in this frequency bin (1/code volume) //
@@ -92,13 +92,13 @@
             double cmag_adv=0, fluxlim_ij=1, v_Area_dot_rt=0, v_Fluid_dot_rt=0; for(k=0;k<3;k++) {v_Area_dot_rt += v_frame[k] * Face_Area_Vec[k]; v_Fluid_dot_rt += (0.5*(local.Vel[k]+VelPred_j[k])/All.cf_atime) * Face_Area_Vec[k];}
             double scalar_ij_phys = 2.*scalar_i*scalar_j/(scalar_i+scalar_j) * All.cf_a3inv; // use harmonic mean here, to weight lower value
 #ifdef RT_FLUXLIMITER
-            double fluxlim_j = return_flux_limiter(j,k_freq);
+            double fluxlim_j = return_flux_limiter(j,k_freq,P,CellP);
             double fluxlim_i = local.RT_DiffusionCoeff[k_freq] * local.Density * local.Rad_Kappa[k_freq] / c_light_eff; /* figure this out by what we've passed to save an extra variable being sent, here */
             fluxlim_ij = 0.5 * (fluxlim_i+fluxlim_j);
 #endif
             double fac_fluxlim = rsol_corr*(4./3.)*fluxlim_ij*v_Fluid_dot_rt - v_Area_dot_rt; /* also need to account for where the RSOL terms appear in the asymptotic flux with an RSOL */
 #ifdef RT_RADPRESSURE_IN_HYDRO
-            fac_fluxlim = rsol_corr*fluxlim_ij*v_Fluid_dot_rt - v_Area_dot_rt + (2.*rt_absorb_frac_albedo(j,k_freq))*(fluxlim_ij/3.)*v_Fluid_dot_rt; // when P is included in hydro solver, some terms are automatically included, some not, so the pre-factor here needs to be revised
+            fac_fluxlim = rsol_corr*fluxlim_ij*v_Fluid_dot_rt - v_Area_dot_rt + (2.*rt_absorb_frac_albedo(j,k_freq,P,CellP))*(fluxlim_ij/3.)*v_Fluid_dot_rt; // when P is included in hydro solver, some terms are automatically included, some not, so the pre-factor here needs to be revised
 #endif
             cmag_adv += scalar_ij_phys * fac_fluxlim; // need to be careful with the sign here. since this is an oriented area and A points from j to i, need to watch the sign here (recently flipped in push - need to test). the 1/3 sometimes above owes to the fact that this is really the --pressure-- term for FLD-like methods, the energy term is implicitly part of the flux already if we're actually doing this correctly //
             cmag_adv += fabs(v_Area_dot_rt) * (scalar_j-scalar_i); // hll (rusanov) flux to stabilize and smooth flow
@@ -162,7 +162,7 @@
         {
             double d_scalar = scalar_i - scalar_j;
             double face_dot_flux=0., cmag=0., cmag_flux[3]={0}, grad_norm=0, flux_i[3]={0}, flux_j[3]={0}, thold_hll;
-            double kappa_i = local.RT_DiffusionCoeff[k_freq], kappa_j = rt_diffusion_coefficient(j,k_freq), kappa_ij = 0.5*(kappa_i+kappa_j); // physical units
+            double kappa_i = local.RT_DiffusionCoeff[k_freq], kappa_j = rt_diffusion_coefficient(j,k_freq,P,CellP), kappa_ij = 0.5*(kappa_i+kappa_j); // physical units
 
             /* calculate the eigenvalues for the HLLE flux-weighting */
             for(k=0;k<3;k++)

@@ -155,7 +155,7 @@ double sigmoid_sqrt(double x)
 }
 
 /* Returns the Frobenius norm of the velocity gradient in physical units */
-double velocity_gradient_norm(int i)
+double velocity_gradient_norm(int i, struct particle_data *pp, struct gas_cell_data *cell)
 {
     double dv2=0; int j,k; for(j=0;j<3;j++) {for(k=0;k<3;k++) {double vt = CellP[i].Gradients.Velocity[j][k]*All.cf_a2inv; /* physical velocity gradient */
         if(All.ComovingIntegrationOn) {if(j==k) {vt += All.cf_hubble_a;}} /* add hubble-flow correction */

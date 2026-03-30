@@ -216,7 +216,7 @@ void do_the_kick(int i, integertime tstart, integertime tend, integertime tcurre
                 P[i].Vel[j] = (mass_old*P[i].Vel[j] + dp[j]*All.cf_atime) / mass_new; // call after tabulating dP[j] //
             } // kick for gas internal energy/entropy
             e_old += d_inc * CellP[i].dInternalEnergy; // for(j = 0; j< 3; j++) e_old -= 0.5*mass_new * (P[i].Vel[j]/All.cf_atime)*(P[i].Vel[j]/All.cf_atime); // increment of total (thermal+kinetic) energy; subtract off the new kinetic energy //
-            CellP[i].InternalEnergy = e_old / mass_new; check_particle_for_temperature_minimum(i); // obtain the new internal energy per unit mass, check floor // */
+            CellP[i].InternalEnergy = e_old / mass_new; check_particle_for_temperature_minimum(i, P, CellP); // obtain the new internal energy per unit mass, check floor // */
              
             // at the end of this kick, need to re-zero the dInternalEnergy, and other conserved-variable gas/fluid quantities set in the hydro loop, to avoid double-counting them
             if(mode==0) {CellP[i].dMass=0;} /* CellP[i].dInternalEnergy=0; CellP[i].dMomentum[0]=CellP[i].dMomentum[1]=CellP[i].dMomentum[2]=0; */
@@ -281,7 +281,7 @@ void do_the_kick(int i, integertime tstart, integertime tend, integertime tcurre
             //  both are not needed. we find slightly cleaner results on that test keeping the gravity and removing the KE switch
             
             // also check for flows which are totally dominated by the adiabatic component of their temperature evolution //
-            // double mach = fabs(CellP[i].MaxSignalVel/Get_Gas_effective_soundspeed_i(i) - 2.0); //
+            // double mach = fabs(CellP[i].MaxSignalVel/Get_Gas_effective_soundspeed_i(i, P, CellP) - 2.0); //
             // if(mach < 1.1) {do_entropy=1;} // (actually, this switch tends to do more harm than good!) //
             //do_entropy = 0; // seems unstable in tests like interacting blastwaves... //
             if(do_entropy)
@@ -297,7 +297,7 @@ void do_the_kick(int i, integertime tstart, integertime tend, integertime tcurre
                 CellP[i].DtPhi = (1./3.) * (CellP[i].Phi*All.cf_a3inv) * P[i].Particle_DivVel*All.cf_a2inv; // cf_a3inv from mass-based phi-fluxes
 #endif
 #endif
-                if(All.ComovingIntegrationOn) {CellP[i].DtInternalEnergy -= 3*(gamma_eos(i)-1) * CellP[i].InternalEnergyPred * All.cf_hubble_a;}
+                if(All.ComovingIntegrationOn) {CellP[i].DtInternalEnergy -= 3*(gamma_eos(i, P, CellP)-1) * CellP[i].InternalEnergyPred * All.cf_hubble_a;}
                 dEnt = CellP[i].InternalEnergy + CellP[i].DtInternalEnergy * dt_hydrokick; /* gravity term not included here, as it makes this unstable */
 #ifdef HYDRO_MESHLESS_FINITE_VOLUME
                 CellP[i].dMass = CellP[i].DtMass = 0;
@@ -309,7 +309,7 @@ void do_the_kick(int i, integertime tstart, integertime tend, integertime tcurre
             CellP[i].Density_ExplicitInt *= exp(-DMIN(1.5,DMAX(-1.5,P[i].Particle_DivVel*All.cf_a2inv * dt_hydrokick))); /*!< explicitly integrated volume/density variable to be used if integrating the SPH-like form of the continuity directly */
             if(CellP[i].FaceClosureError > 0) {double drho2=0; int k; for(k=0;k<3;k++) {drho2+=CellP[i].Gradients.Density[k]*CellP[i].Gradients.Density[k];} /* the evolved density evolves back to the explicit density on a relaxation time of order the sound-crossing or tension wave-crossing time across the density gradient length */
                 if(drho2>0 && CellP[i].Density_ExplicitInt>0 && CellP[i].Density>0) {
-                    double Lgrad = CellP[i].Density / sqrt(drho2); Lgrad=DMAX(Lgrad,P[i].KernelRadius); double cs_eff_forrestoringforce=Get_Gas_effective_soundspeed_i(i); /* gradient scale length and sound speed */
+                    double Lgrad = CellP[i].Density / sqrt(drho2); Lgrad=DMAX(Lgrad,P[i].KernelRadius); double cs_eff_forrestoringforce=Get_Gas_effective_soundspeed_i(i, P, CellP); /* gradient scale length and sound speed */
 #if defined(EOS_TILLOTSON)
                     cs_eff_forrestoringforce=DMIN(cs_eff_forrestoringforce , sqrt(All.Tillotson_EOS_params[CellP[i].CompositionType][10] / CellP[i].Density)); /* speed of deviatoric waves, which is most relevant, if defined */
 #endif
@@ -319,7 +319,7 @@ void do_the_kick(int i, integertime tstart, integertime tend, integertime tcurre
 #endif
 
 #ifdef RADTRANSFER /* block here to deal with tricky cases where radiation energy density is -much- larger than thermal, re-distribute the energy that would have taken us negative in gas back into radiation */
-            int kfreq; double erad_tot=0,emin=0,enew=0,demin=0,dErad=0,rsol_fac=c_light_code_reduced(i)/C_LIGHT_CODE;  for(kfreq=0;kfreq<N_RT_FREQ_BINS;kfreq++) {erad_tot+=CellP[i].Rad_E_gamma[kfreq];}
+            int kfreq; double erad_tot=0,emin=0,enew=0,demin=0,dErad=0,rsol_fac=c_light_code_reduced(i,P,CellP)/C_LIGHT_CODE;  for(kfreq=0;kfreq<N_RT_FREQ_BINS;kfreq++) {erad_tot+=CellP[i].Rad_E_gamma[kfreq];}
             if(erad_tot > 0) // do some checks if this helps or hurts (identical setup in predict) - seems relatively ok for now, in new form
             {
                 demin=0.025*CellP[i].InternalEnergy; emin=0.025*(erad_tot/rsol_fac + CellP[i].InternalEnergy*P[i].Mass); enew=DMAX(erad_tot/rsol_fac + dEnt*P[i].Mass, emin);
@@ -331,7 +331,7 @@ void do_the_kick(int i, integertime tstart, integertime tend, integertime tcurre
 #else
             if(dEnt < 0.5*CellP[i].InternalEnergy) {CellP[i].InternalEnergy *= 0.5;} else {CellP[i].InternalEnergy = dEnt;}
 #endif
-            check_particle_for_temperature_minimum(i); /* if we've fallen below the minimum temperature, force the 'floor' */
+            check_particle_for_temperature_minimum(i, P, CellP); /* if we've fallen below the minimum temperature, force the 'floor' */
         }
         
         /* now, kick for non-gas/fluid quantities (accounting for momentum conservation if masses are changing) */
@@ -450,7 +450,7 @@ void set_predicted_quantities_for_extra_physics(int i)
             for(k=0;k<3;k++) CellP[i].Rad_Flux_Pred[kf][k] = CellP[i].Rad_Flux[kf][k];
 #endif
         }
-        rt_eddington_update_calculation(i);
+        rt_eddington_update_calculation(i,P,CellP);
 #endif
 #ifdef RT_EVOLVE_INTENSITIES
         for(kf=0;kf<N_RT_FREQ_BINS;kf++) {for(k=0;k<N_RT_INTENSITY_BINS;k++) {CellP[i].Rad_Intensity_Pred[kf][k] = CellP[i].Rad_Intensity[kf][k];}}
@@ -460,7 +460,7 @@ void set_predicted_quantities_for_extra_physics(int i)
         for(k=0;k<3;k++) {for(kf=0;kf<3;kf++) {CellP[i].Elastic_Stress_Tensor_Pred[k][kf]=CellP[i].Elastic_Stress_Tensor[k][kf];}}
 #endif
         
-        set_eos_pressure(i);
+        set_eos_pressure(i, P, CellP);
     }
 }
 
@@ -479,9 +479,9 @@ void do_kick_for_extra_physics(int i, integertime tstart, integertime tend, doub
     if(CellP[i].Density > 0)
     {
         /* now we're going to check for physically reasonable phi values */
-        double cs_phys = Get_Gas_effective_soundspeed_i(i);
+        double cs_phys = Get_Gas_effective_soundspeed_i(i, P, CellP);
         double b_phys = 0.0;
-        for(j = 0; j < 3; j++) {b_phys += Get_Gas_BField(i,j)*Get_Gas_BField(i,j);}
+        for(j = 0; j < 3; j++) {b_phys += Get_Gas_BField(i,j, P, CellP)*Get_Gas_BField(i,j, P, CellP);}
         b_phys = sqrt(b_phys)*All.cf_a2inv;
         double vsig1 = sqrt(cs_phys*cs_phys + b_phys*b_phys/(CellP[i].Density*All.cf_a3inv));
         double vsig2 = 0.5 * fabs(CellP[i].MaxSignalVel);
@@ -536,9 +536,9 @@ void do_kick_for_extra_physics(int i, integertime tstart, integertime tend, doub
 #endif
     
 #ifdef RADTRANSFER
-    rt_update_driftkick(i,dt_entr,0);
+    rt_update_driftkick(i,dt_entr,0,P,CellP);
 #ifdef GRAIN_RDI_TESTPROBLEM_LIVE_RADIATION_INJECTION
-    if(P[i].Pos[2] > DMIN(19., DMAX(1.1*All.Time*c_light_code_reduced(i), DMIN(18.*boxSize_X + (All.Vertical_Grain_Accel*All.Dust_to_Gas_Mass_Ratio - All.Vertical_Gravity_Strength)*All.Time*All.Time/2., 19.)))) {for(j=0;j<N_RT_FREQ_BINS;j++) {CellP[i].Rad_E_gamma[j]*=0.5; CellP[i].Rad_E_gamma_Pred[j]*=0.5;
+    if(P[i].Pos[2] > DMIN(19., DMAX(1.1*All.Time*c_light_code_reduced(i,P,CellP), DMIN(18.*boxSize_X + (All.Vertical_Grain_Accel*All.Dust_to_Gas_Mass_Ratio - All.Vertical_Gravity_Strength)*All.Time*All.Time/2., 19.)))) {for(j=0;j<N_RT_FREQ_BINS;j++) {CellP[i].Rad_E_gamma[j]*=0.5; CellP[i].Rad_E_gamma_Pred[j]*=0.5;
 #ifdef RT_EVOLVE_FLUX
         if(CellP[i].Rad_Flux[j][2] < 0) {CellP[i].Rad_Flux[j][2]=-CellP[i].Rad_Flux[j][2]; CellP[i].Rad_Flux_Pred[j][2]=CellP[i].Rad_Flux[j][2];}
 #endif

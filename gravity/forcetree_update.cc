@@ -50,7 +50,7 @@ void force_kick_node(int i, MyDouble * dp)
     {
 #ifdef RT_SEPARATELY_TRACK_LUMPOS
         double lum[N_RT_FREQ_BINS];
-        int active_check = rt_get_source_luminosity(i,-1,lum);
+        int active_check = rt_get_source_luminosity(i,-1,lum,P,CellP);
         if(active_check) {rt_source_lum_dp[j]=dp[j];} else {rt_source_lum_dp[j]=0;}
 #endif
 #ifdef DM_SCALARFIELD_SCREENING
