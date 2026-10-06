@@ -1983,6 +1983,43 @@ void gpu_ngb_list_build(struct particle_data *P_shared, int num_total,
             return;
         }
         if(!fresh.rows_are_positions) {
+            /* SPIKE(ls6_ghost): TEMPORARY diagnostic, lives only on branch ls6_ghost_spike; delete the branch once the
+             * Lonestar6 step-6 ghost fault is diagnosed.  Recounts the not-current imported members on the device,
+             * then on the host, and names the first few, so a stale device view can be told from stale data. */
+            {
+                const integertime spk_ti_ref = fresh.ti_ref;
+                struct particle_data *spk_P = P_shared;
+                const int spk_b = ghost_base, spk_e = ghost_end, spk_tbm = type_bitmask;
+                int spk_dev_stale = 0;
+                Kokkos::parallel_reduce("spike_ls6_ghost_recount", Kokkos::RangePolicy<>(spk_b, spk_e),
+                    KOKKOS_LAMBDA(int j, int &n) {
+                        if(sfc_pool_member(&spk_P[j], spk_tbm) && spk_P[j].Ti_current != spk_ti_ref) {n++;}
+                    }, spk_dev_stale);
+                Kokkos::fence();
+                int spk_members = 0, spk_host_stale = 0, spk_shown = 0;
+                const int *spk_home_rank = ghost_get_home_rank(), *spk_home_index = ghost_get_home_index();
+                for(int j = spk_b; j < spk_e; j++) {
+                    if(!sfc_pool_member(&spk_P[j], spk_tbm)) {continue;}
+                    spk_members++;
+                    if(spk_P[j].Ti_current == spk_ti_ref) {continue;}
+                    spk_host_stale++;
+                    if(spk_shown < 5) {
+                        spk_shown++;
+                        const int g = j - spk_b;
+                        printf("SPIKE_LS6_GHOST task %d stale ghost slot %d (g=%d): ID=%llu Type=%d Mass=%g Ti_current=%lld "
+                               "home_rank=%d home_index=%d Pos=(%g,%g,%g)\n", ThisTask, j, g,
+                               (unsigned long long)spk_P[j].ID, (int)spk_P[j].Type, (double)spk_P[j].Mass,
+                               (long long)spk_P[j].Ti_current, spk_home_rank ? spk_home_rank[g] : -1,
+                               spk_home_index ? spk_home_index[g] : -1,
+                               (double)spk_P[j].Pos[0], (double)spk_P[j].Pos[1], (double)spk_P[j].Pos[2]);
+                    }
+                }
+                printf("SPIKE_LS6_GHOST task %d caller=%s: ghosts [%d,%d) members=%d device_recount_stale=%d host_stale=%d "
+                       "seg_ti_ref=%lld t_now=%lld ghost_pool_ti=%lld\n", ThisTask, caller_label ? caller_label : "?",
+                       spk_b, spk_e, spk_members, spk_dev_stale, spk_host_stale, (long long)spk_ti_ref,
+                       (long long)t_now, (long long)ghost_pool_current_ti());
+                fflush(stdout);
+            }
             sidx_segment_free(&fresh);
             ngl_stop_empty(gnl, num_active, 7742, __LINE__, "gpu_ngb_list_build (caller '%s'): an imported particle is "
                            "not at the time of this search although its import was certified current; neighbour list "
